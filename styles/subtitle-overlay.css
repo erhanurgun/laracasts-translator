@@ -1,0 +1,64 @@
+/* Laracasts Translator - Altyazı Overlay Stilleri */
+
+#lct-subtitle-container {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99;
+  pointer-events: none;
+  text-align: center;
+  max-width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: bottom 0.2s ease;
+}
+
+#lct-subtitle-original,
+#lct-subtitle-translation {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  line-height: 1.4;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.6);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+
+#lct-subtitle-original:empty,
+#lct-subtitle-translation:empty {
+  display: none;
+}
+
+#lct-subtitle-original {
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.75);
+  font-size: 15px;
+}
+
+#lct-subtitle-translation {
+  color: #ffd700;
+  background: rgba(0, 0, 0, 0.75);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+/* Fullscreen'de daha büyük */
+:fullscreen #lct-subtitle-container,
+:-webkit-full-screen #lct-subtitle-container {
+  bottom: 80px;
+}
+
+:fullscreen #lct-subtitle-original,
+:-webkit-full-screen #lct-subtitle-original {
+  font-size: 20px;
+}
+
+:fullscreen #lct-subtitle-translation,
+:-webkit-full-screen #lct-subtitle-translation {
+  font-size: 22px;
+}

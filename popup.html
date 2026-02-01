@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <header class="header">
+      <h1>Laracasts Translator</h1>
+      <label class="toggle-switch">
+        <input type="checkbox" id="enableToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </header>
+
+    <!-- API Key -->
+    <section class="section">
+      <label class="label">OpenAI API Key</label>
+      <div class="api-key-row">
+        <input type="password" id="apiKey" placeholder="sk-..." class="input">
+        <button id="toggleApiKey" class="btn-icon" title="Göster/Gizle">👁</button>
+      </div>
+      <div id="apiKeyStatus" class="status"></div>
+    </section>
+
+    <!-- Altyazı Ayarları -->
+    <section class="section">
+      <h2 class="section-title">Altyazı Ayarları</h2>
+
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="showOriginal" checked>
+          Orijinal altyazıyı göster
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="showTranslation" checked>
+          Çeviriyi göster
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <label class="label">Yazı boyutu: <span id="fontSizeValue">16</span>px</label>
+        <input type="range" id="fontSize" min="12" max="28" value="16" class="range">
+      </div>
+
+      <div class="setting-row colors">
+        <div>
+          <label class="label">Orijinal renk</label>
+          <input type="color" id="originalColor" value="#ffffff">
+        </div>
+        <div>
+          <label class="label">Çeviri renk</label>
+          <input type="color" id="translationColor" value="#ffd700">
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="label">Arka plan opaklığı: <span id="bgOpacityValue">75</span>%</label>
+        <input type="range" id="bgOpacity" min="0" max="100" value="75" class="range">
+      </div>
+    </section>
+
+    <!-- Cache -->
+    <section class="section">
+      <h2 class="section-title">Önbellek</h2>
+      <div id="cacheStats" class="cache-stats">Yükleniyor...</div>
+      <button id="clearCache" class="btn btn-danger">Önbelleği Temizle</button>
+    </section>
+  </div>
+
+  <script src="lib/storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
