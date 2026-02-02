@@ -278,22 +278,34 @@
         currentCues = msg.cues;
         translationState = 'done';
         activeTranslationPort = null;
-        showMessage('Çeviri tamamlandı');
         port.disconnect();
         console.log('LCT: Çeviri tamamlandı');
 
-        // Video oynatılıyorsa: 5sn sonra temizle
-        // Video durmuşsa: play/seeked event'ine kadar bekle
-        if (currentVideo.paused) {
-          const clearOnResume = () => {
-            setTimeout(() => { if (translationState === 'done') showMessage(''); }, 3000);
-            currentVideo.removeEventListener('playing', clearOnResume);
-            currentVideo.removeEventListener('seeked', clearOnResume);
-          };
-          currentVideo.addEventListener('playing', clearOnResume, { once: true });
-          currentVideo.addEventListener('seeked', clearOnResume, { once: true });
+        // Ekranda aktif cue varsa → anında TR çevirisini göster
+        const time = currentVideo?.currentTime || 0;
+        const activeCue = findActiveCue(time);
+        if (activeCue) {
+          statusMessage = null;
+          renderer.update(
+            settings.showOriginal ? activeCue.text : '',
+            settings.showTranslation ? (activeCue.translation || '') : ''
+          );
         } else {
-          setTimeout(() => { if (translationState === 'done') showMessage(''); }, 5000);
+          showMessage('Çeviri tamamlandı!');
+
+          // Video oynatılıyorsa: 5sn sonra temizle
+          // Video durmuşsa: play/seeked event'ine kadar bekle
+          if (currentVideo.paused) {
+            const clearOnResume = () => {
+              setTimeout(() => { if (translationState === 'done') showMessage(''); }, 3000);
+              currentVideo.removeEventListener('playing', clearOnResume);
+              currentVideo.removeEventListener('seeked', clearOnResume);
+            };
+            currentVideo.addEventListener('playing', clearOnResume, { once: true });
+            currentVideo.addEventListener('seeked', clearOnResume, { once: true });
+          } else {
+            setTimeout(() => { if (translationState === 'done') showMessage(''); }, 5000);
+          }
         }
       } else if (msg.type === 'ERROR') {
         console.warn('LCT: Çeviri hatası:', msg.error);
