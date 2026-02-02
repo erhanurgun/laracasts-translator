@@ -37,9 +37,9 @@ const StorageBg = {
     return result[key] || null;
   },
 
-  async setCachedTranslation(videoId, cues) {
+  async setCachedTranslation(videoId, cues, fingerprint) {
     const key = this._cacheKey(videoId);
-    const entry = { cues, timestamp: Date.now() };
+    const entry = { cues, fingerprint, timestamp: Date.now() };
     try {
       await chrome.storage.local.set({ [key]: entry });
     } catch (e) {
@@ -60,6 +60,17 @@ const StorageBg = {
   }
 };
 
+// --- Cache Fingerprint ---
+
+function createFingerprint(cues) {
+  const sample = cues.slice(0, 3).map(c => c.text).join('|');
+  let hash = 0;
+  for (let i = 0; i < sample.length; i++) {
+    hash = ((hash << 5) - hash + sample.charCodeAt(i)) | 0;
+  }
+  return `${cues.length}:${hash}`;
+}
+
 // --- OpenAI Çeviri ---
 
 const SYSTEM_PROMPT = `You are a professional subtitle translator for programming education videos.
@@ -72,7 +83,10 @@ Rules:
 4. Maintain conversational/tutorial tone.
 5. Translate filler words naturally (um→şey, okay→tamam, right→değil mi, so→yani, actually→aslında, basically→temelde).
 6. Do NOT add explanations or notes.
-7. Return ONLY the numbered translations, nothing else.`;
+7. Return ONLY the numbered translations, nothing else.
+8. Format each translation on its own line as: NUMBER. TRANSLATION
+9. Do not add blank lines between translations.
+10. Do not include the original text, only the translation.`;
 
 const BATCH_SIZE = 50;
 const MAX_RETRIES = 3;
@@ -118,14 +132,35 @@ async function translateBatch(texts, apiKey) {
       const data = await response.json();
       const content = data.choices[0].message.content.trim();
 
-      // Numaralı satırları parse et
+      // Numaralı satırları parse et (baştaki boşlukları tolere et)
       const translations = {};
       const lines = content.split('\n');
       for (const line of lines) {
-        const match = line.match(/^(\d+)\.\s*(.+)/);
+        const match = line.match(/^\s*(\d+)\.\s*(.+)/);
         if (match) {
           translations[parseInt(match[1]) - 1] = match[2].trim();
         }
+      }
+
+      // Parse başarısını kontrol et
+      const matchedCount = Object.keys(translations).length;
+      if (matchedCount === 0) {
+        // Tam başarısızlık: hiç numara eşleşmedi, sıralı satır eşleştirme dene
+        console.warn(`LCT: Numaralı parse tamamen başarısız, sıralı eşleştirme deneniyor`);
+        const nonEmptyLines = lines
+          .map(l => l.trim())
+          .filter(l => l.length > 0)
+          .map(l => l.replace(/^\s*\d+\.\s*/, ''));
+
+        for (let i = 0; i < Math.min(texts.length, nonEmptyLines.length); i++) {
+          translations[i] = nonEmptyLines[i];
+        }
+      }
+
+      // Validasyon
+      const finalCount = Object.keys(translations).length;
+      if (finalCount !== texts.length) {
+        console.warn(`LCT: Çeviri sayısı uyuşmuyor (${finalCount}/${texts.length}), eksikler boş olacak`);
       }
 
       return texts.map((_, i) => translations[i] || '');
@@ -144,10 +179,15 @@ async function translateBatch(texts, apiKey) {
 }
 
 async function translateCues(cues, videoId) {
-  // Önce cache kontrol
+  const fingerprint = createFingerprint(cues);
+
+  // Önce cache kontrol (fingerprint ile doğrula)
   const cached = await StorageBg.getCachedTranslation(videoId);
   if (cached && cached.cues && cached.cues.length === cues.length) {
-    return cached.cues;
+    if (cached.fingerprint === fingerprint) {
+      return cached.cues;
+    }
+    console.warn('LCT: Cache fingerprint uyuşmuyor, yeniden çeviriliyor');
   }
 
   const apiKey = await StorageBg.getApiKey();
@@ -171,8 +211,8 @@ async function translateCues(cues, videoId) {
     translation: allTranslations[i] || ''
   }));
 
-  // Cache'e kaydet
-  await StorageBg.setCachedTranslation(videoId, result);
+  // Cache'e kaydet (fingerprint ile)
+  await StorageBg.setCachedTranslation(videoId, result, fingerprint);
 
   return result;
 }
@@ -210,12 +250,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'SETTINGS_CHANGED') {
-    // Tüm tab'lara ilet
+    // Tüm tab'lara ilet (yedek mekanizma, asıl dinleme storage.onChanged ile)
     chrome.tabs.query({}, (tabs) => {
       for (const tab of tabs) {
         chrome.tabs.sendMessage(tab.id, { type: 'SETTINGS_CHANGED' }).catch(() => {});
       }
     });
+    return true;
   }
 });
 

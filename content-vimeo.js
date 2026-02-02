@@ -19,6 +19,12 @@
   let settings = null;
   let isEnabled = true;
   let videoObserver = null;
+  let syncListenerAttached = false;
+
+  // Çeviri state yönetimi
+  let lastVttUrl = null;
+  let parsedOriginalCues = [];
+  let translationState = 'idle'; // idle | pending_key | translating | done | error
 
   // --- Başlat ---
 
@@ -186,38 +192,69 @@
 
       console.log(`LCT: ${cues.length} altyazı satırı bulundu`);
 
-      // Video ID'yi URL'den çıkar
-      const videoId = extractVideoId();
+      // Cue'ları startTime'a göre sırala (senkronizasyon güvenilirliği)
+      cues.sort((a, b) => a.startTime - b.startTime);
+
+      // State'e kaydet
+      lastVttUrl = vttUrl;
+      parsedOriginalCues = cues;
 
       // Renderer oluştur
       ensureRenderer();
 
-      // Sadece orijinal ile başlat
+      // Orijinal cue'larla sync başlat
       currentCues = cues.map(c => ({ ...c, translation: '' }));
       startSync();
 
-      // Çeviri iste
-      showMessage('Çeviriliyor...');
+      // API key kontrolü
+      if (!settings.apiKey) {
+        translationState = 'pending_key';
+        showMessage('API key gerekli — Eklenti ayarlarından girin');
+        console.log('LCT: API key yok, çeviri beklemede');
+        return;
+      }
+
+      // Çeviriyi başlat
+      await triggerTranslation();
+
+    } catch (err) {
+      console.error('LCT: Pipeline hatası:', err);
+      translationState = 'error';
+      showMessage('Bir hata oluştu');
+    }
+  }
+
+  async function triggerTranslation() {
+    if (parsedOriginalCues.length === 0) return;
+
+    translationState = 'translating';
+    showMessage('Çeviriliyor...');
+
+    const videoId = extractVideoId();
+
+    try {
       const response = await chrome.runtime.sendMessage({
         type: 'TRANSLATE_CUES',
-        cues: cues,
+        cues: parsedOriginalCues,
         videoId: videoId
       });
 
       if (response && response.success) {
         currentCues = response.cues;
+        translationState = 'done';
         showMessage('');
         console.log('LCT: Çeviri tamamlandı');
       } else {
         const errorMsg = response ? response.error : 'Bağlantı hatası';
         console.warn('LCT: Çeviri hatası:', errorMsg);
+        translationState = 'error';
         showMessage(errorMsg);
         // Orijinal altyazılarla devam et (graceful degradation)
       }
-
     } catch (err) {
-      console.error('LCT: Pipeline hatası:', err);
-      showMessage('Bir hata oluştu');
+      console.error('LCT: Çeviri isteği hatası:', err);
+      translationState = 'error';
+      showMessage('Çeviri sırasında hata oluştu');
     }
   }
 
@@ -257,6 +294,10 @@
   function startSync() {
     if (!currentVideo) return;
 
+    // Duplicate listener kontrolü
+    if (syncListenerAttached) return;
+    syncListenerAttached = true;
+
     currentVideo.addEventListener('timeupdate', onTimeUpdate);
   }
 
@@ -278,6 +319,7 @@
 
   /**
    * Binary search ile aktif cue bulma
+   * Küçük tolerans ile zaman boşluklarını kapatır
    */
   function findActiveCue(time) {
     const cues = currentCues;
@@ -290,9 +332,9 @@
       const mid = Math.floor((low + high) / 2);
       const cue = cues[mid];
 
-      if (time < cue.startTime) {
+      if (time < cue.startTime - 0.1) {
         high = mid - 1;
-      } else if (time > cue.endTime) {
+      } else if (time > cue.endTime + 0.1) {
         low = mid + 1;
       } else {
         return cue;
@@ -340,12 +382,17 @@
   function cleanup() {
     if (currentVideo) {
       currentVideo.removeEventListener('timeupdate', onTimeUpdate);
+      currentVideo = null;
     }
+    syncListenerAttached = false;
     if (renderer) {
       renderer.destroy();
       renderer = null;
     }
     currentCues = [];
+    parsedOriginalCues = [];
+    translationState = 'idle';
+    lastVttUrl = null;
   }
 
   // --- Ayarlar & Mesajlar ---
@@ -368,6 +415,14 @@
   }
 
   function listenForMessages() {
+    // Birincil yöntem: chrome.storage.onChanged — iframe'lerde de çalışır
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'sync') {
+        onSettingsChanged();
+      }
+    });
+
+    // Yedek: runtime mesajları (top frame için)
     chrome.runtime.onMessage.addListener((message) => {
       if (message.type === 'SETTINGS_CHANGED') {
         onSettingsChanged();
@@ -375,25 +430,37 @@
     });
   }
 
+  let settingsChangeDebounce = null;
   async function onSettingsChanged() {
-    settings = await getSettings();
-    const wasEnabled = isEnabled;
-    isEnabled = settings.enabled;
+    // Debounce: birden fazla storage key aynı anda değişebilir
+    clearTimeout(settingsChangeDebounce);
+    settingsChangeDebounce = setTimeout(async () => {
+      const oldApiKey = settings ? settings.apiKey : '';
+      settings = await getSettings();
+      const wasEnabled = isEnabled;
+      isEnabled = settings.enabled;
 
-    if (!isEnabled) {
-      cleanup();
-      return;
-    }
+      if (!isEnabled) {
+        cleanup();
+        return;
+      }
 
-    if (!wasEnabled && isEnabled) {
-      findVideo();
-      return;
-    }
+      if (!wasEnabled && isEnabled) {
+        findVideo();
+        return;
+      }
 
-    // Stil güncelle
-    if (renderer) {
-      renderer.updateStyle(settings);
-    }
+      // Stil güncelle
+      if (renderer) {
+        renderer.updateStyle(settings);
+      }
+
+      // API key eklendiyse ve çeviri beklemedeyse → çeviriyi tetikle
+      if (translationState === 'pending_key' && settings.apiKey && parsedOriginalCues.length > 0) {
+        console.log('LCT: API key algılandı, çeviri başlatılıyor');
+        triggerTranslation();
+      }
+    }, 100);
   }
 
   // --- Başlat ---

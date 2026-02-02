@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const key = els.apiKey.value.trim();
       await Storage.setApiKey(key);
       if (key) {
-        els.apiKeyStatus.textContent = 'API key kaydedildi';
+        els.apiKeyStatus.textContent = 'API key kaydedildi. Aktif videolar için çeviri başlatılıyor...';
         els.apiKeyStatus.className = 'status success';
       } else {
         els.apiKeyStatus.textContent = 'API key gerekli';
