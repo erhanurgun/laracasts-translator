@@ -369,7 +369,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_SETTINGS') {
     StorageBg.getSettings()
       .then(settings => {
-        // Content script'lere apiKey gönderme — sadece varlık bilgisi yeter
+        // Content script'lere apiKey gönderme - sadece varlık bilgisi yeter
         const { apiKey, ...safeSettings } = settings;
         safeSettings.hasApiKey = !!apiKey;
         sendResponse({ success: true, settings: safeSettings });

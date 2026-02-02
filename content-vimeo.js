@@ -235,7 +235,7 @@
       // API key kontrolü
       if (!settings.hasApiKey) {
         translationState = 'pending_key';
-        showMessage('API key gerekli — Eklenti ayarlarından girin');
+        showMessage('API key gerekli - Eklenti ayarlarından girin');
         console.log('LCT: API key yok, çeviri beklemede');
         return;
       }
@@ -268,7 +268,7 @@
     activeTranslationPort = port;
 
     port.onMessage.addListener((msg) => {
-      // Stale çeviri kontrolü — epoch değiştiyse sonucu at
+      // Stale çeviri kontrolü - epoch değiştiyse sonucu at
       if (epoch !== translationEpoch) return;
 
       if (msg.type === 'PROGRESS') {
@@ -444,7 +444,7 @@
 
   /**
    * Binary search ile aktif cue bulma
-   * Kesin zaman eşleşmesi — tolerans yok
+   * Kesin zaman eşleşmesi - tolerans yok
    */
   function findActiveCue(time) {
     const cues = currentCues;
@@ -559,7 +559,7 @@
   }
 
   function listenForMessages() {
-    // Birincil yöntem: chrome.storage.onChanged — iframe'lerde de çalışır
+    // Birincil yöntem: chrome.storage.onChanged - iframe'lerde de çalışır
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'sync' || (area === 'local' && changes._lct_apiKey)) {
         onSettingsChanged();

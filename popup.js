@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Format doğrulama
       if (key && !key.startsWith('sk-')) {
-        els.apiKeyStatus.textContent = 'Geçersiz format — OpenAI key "sk-" ile başlamalı';
+        els.apiKeyStatus.textContent = 'Geçersiz format - OpenAI key "sk-" ile başlamalı';
         els.apiKeyStatus.className = 'status error';
         return;
       }
