@@ -37,13 +37,13 @@
 #lct-subtitle-original {
   color: #ffffff;
   background: rgba(0, 0, 0, 0.75);
-  font-size: 15px;
+  font-size: 25px;
 }
 
 #lct-subtitle-translation {
   color: #ffd700;
   background: rgba(0, 0, 0, 0.75);
-  font-size: 17px;
+  font-size: 27px;
   font-weight: 500;
 }
 
@@ -55,10 +55,10 @@
 
 :fullscreen #lct-subtitle-original,
 :-webkit-full-screen #lct-subtitle-original {
-  font-size: 20px;
+  font-size: 30px;
 }
 
 :fullscreen #lct-subtitle-translation,
 :-webkit-full-screen #lct-subtitle-translation {
-  font-size: 22px;
+  font-size: 32px;
 }

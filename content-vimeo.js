@@ -25,6 +25,7 @@
   let lastVttUrl = null;
   let parsedOriginalCues = [];
   let translationState = 'idle'; // idle | pending_key | translating | done | error
+  let statusMessage = null;      // Aktif durum mesajı (ilerleme, tamamlandı, hata)
 
   // --- Başlat ---
 
@@ -113,16 +114,35 @@
     watchVideoChanges(video);
   }
 
+  let nativeTrackHandlers = null;
+
   function disableNativeTextTracks(video) {
-    for (let i = 0; i < video.textTracks.length; i++) {
-      video.textTracks[i].mode = 'disabled';
-    }
-    // Yeni track eklenirse de kapat
-    video.textTracks.addEventListener('addtrack', () => {
+    function disableAll() {
       for (let i = 0; i < video.textTracks.length; i++) {
-        video.textTracks[i].mode = 'disabled';
+        if (video.textTracks[i].mode !== 'disabled') {
+          video.textTracks[i].mode = 'disabled';
+        }
       }
-    });
+    }
+
+    disableAll();
+    video.textTracks.addEventListener('addtrack', disableAll);
+    video.textTracks.addEventListener('change', disableAll);
+
+    nativeTrackHandlers = { target: video.textTracks, handler: disableAll };
+  }
+
+  function enableNativeTextTracks(video) {
+    if (nativeTrackHandlers) {
+      nativeTrackHandlers.target.removeEventListener('addtrack', nativeTrackHandlers.handler);
+      nativeTrackHandlers.target.removeEventListener('change', nativeTrackHandlers.handler);
+      nativeTrackHandlers = null;
+    }
+    if (video) {
+      for (let i = 0; i < video.textTracks.length; i++) {
+        video.textTracks[i].mode = 'showing';
+      }
+    }
   }
 
   function findVTTUrl(video) {
@@ -244,11 +264,22 @@
         currentCues = msg.cues;
         translationState = 'done';
         showMessage('Çeviri tamamlandı');
-        setTimeout(() => {
-          if (translationState === 'done') showMessage('');
-        }, 2000);
         port.disconnect();
         console.log('LCT: Çeviri tamamlandı');
+
+        // Video oynatılıyorsa: 5sn sonra temizle
+        // Video durmuşsa: play/seeked event'ine kadar bekle
+        if (currentVideo.paused) {
+          const clearOnResume = () => {
+            setTimeout(() => { if (translationState === 'done') showMessage(''); }, 3000);
+            currentVideo.removeEventListener('playing', clearOnResume);
+            currentVideo.removeEventListener('seeked', clearOnResume);
+          };
+          currentVideo.addEventListener('playing', clearOnResume, { once: true });
+          currentVideo.addEventListener('seeked', clearOnResume, { once: true });
+        } else {
+          setTimeout(() => { if (translationState === 'done') showMessage(''); }, 5000);
+        }
       } else if (msg.type === 'ERROR') {
         console.warn('LCT: Çeviri hatası:', msg.error);
         translationState = 'error';
@@ -317,6 +348,16 @@
     const time = currentVideo.currentTime;
     const activeCue = findActiveCue(time);
 
+    // Durum mesajı aktifken: mesajı koru, sadece EN altyazıyı güncelle
+    if (statusMessage) {
+      if (translationState === 'translating') {
+        const originalText = (activeCue && settings.showOriginal) ? activeCue.text : '';
+        renderer.update(originalText, statusMessage);
+      }
+      return;
+    }
+
+    // Normal altyazı gösterimi
     if (activeCue) {
       renderer.update(
         settings.showOriginal ? activeCue.text : '',
@@ -329,7 +370,7 @@
 
   /**
    * Binary search ile aktif cue bulma
-   * Küçük tolerans ile zaman boşluklarını kapatır
+   * Kesin zaman eşleşmesi — tolerans yok
    */
   function findActiveCue(time) {
     const cues = currentCues;
@@ -342,9 +383,9 @@
       const mid = Math.floor((low + high) / 2);
       const cue = cues[mid];
 
-      if (time < cue.startTime - 0.1) {
+      if (time < cue.startTime) {
         high = mid - 1;
-      } else if (time > cue.endTime + 0.1) {
+      } else if (time > cue.endTime) {
         low = mid + 1;
       } else {
         return cue;
@@ -362,10 +403,22 @@
   }
 
   function showMessage(msg) {
+    statusMessage = msg || null;
     if (!renderer && currentVideo) ensureRenderer();
-    if (renderer) {
-      renderer.update('', msg || '');
+    if (!renderer) return;
+
+    if (statusMessage) {
+      if (translationState === 'translating') {
+        // Çeviri sırasında: EN altyazı + durum mesajı birlikte göster
+        const time = currentVideo?.currentTime || 0;
+        const activeCue = findActiveCue(time);
+        const originalText = (activeCue && settings.showOriginal) ? activeCue.text : '';
+        renderer.update(originalText, statusMessage);
+      } else {
+        renderer.update('', statusMessage);
+      }
     }
+    // statusMessage null ise: bir sonraki timeupdate normal gösterir
   }
 
   // --- Video Değişiklik İzleme ---
@@ -389,10 +442,12 @@
 
   function cleanup() {
     if (currentVideo) {
+      enableNativeTextTracks(currentVideo);
       currentVideo.removeEventListener('timeupdate', onTimeUpdate);
       currentVideo = null;
     }
     syncListenerAttached = false;
+    statusMessage = null;
     if (renderer) {
       renderer.destroy();
       renderer = null;
@@ -415,7 +470,7 @@
       enabled: true,
       showOriginal: true,
       showTranslation: true,
-      fontSize: 16,
+      fontSize: 25,
       originalColor: '#ffffff',
       translationColor: '#ffd700',
       bgOpacity: 0.75

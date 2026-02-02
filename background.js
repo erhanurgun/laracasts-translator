@@ -21,7 +21,7 @@ const StorageBg = {
       enabled: true,
       showOriginal: true,
       showTranslation: true,
-      fontSize: 16,
+      fontSize: 25,
       originalColor: '#ffffff',
       translationColor: '#ffd700',
       bgOpacity: 0.75
