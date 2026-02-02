@@ -26,6 +26,8 @@
   let parsedOriginalCues = [];
   let translationState = 'idle'; // idle | pending_key | translating | done | error
   let statusMessage = null;      // Aktif durum mesajı (ilerleme, tamamlandı, hata)
+  let activeTranslationPort = null;
+  let translationEpoch = 0;
 
   // --- Başlat ---
 
@@ -194,6 +196,7 @@
 
   async function processVTT(vttUrl) {
     console.log('LCT: VTT URL:', vttUrl);
+    translationEpoch++;
 
     try {
       // VTT içeriğini al
@@ -247,13 +250,24 @@
   function triggerTranslation() {
     if (parsedOriginalCues.length === 0) return;
 
+    // Önceki çeviriyi iptal et
+    if (activeTranslationPort) {
+      activeTranslationPort.disconnect();
+      activeTranslationPort = null;
+    }
+
     translationState = 'translating';
     showMessage('Çeviriliyor...');
 
+    const epoch = translationEpoch;
     const videoId = extractVideoId();
     const port = chrome.runtime.connect({ name: 'translate' });
+    activeTranslationPort = port;
 
     port.onMessage.addListener((msg) => {
+      // Stale çeviri kontrolü — epoch değiştiyse sonucu at
+      if (epoch !== translationEpoch) return;
+
       if (msg.type === 'PROGRESS') {
         if (msg.cached) {
           showMessage('Önbellekten yükleniyor...');
@@ -263,6 +277,7 @@
       } else if (msg.type === 'COMPLETE') {
         currentCues = msg.cues;
         translationState = 'done';
+        activeTranslationPort = null;
         showMessage('Çeviri tamamlandı');
         port.disconnect();
         console.log('LCT: Çeviri tamamlandı');
@@ -283,6 +298,7 @@
       } else if (msg.type === 'ERROR') {
         console.warn('LCT: Çeviri hatası:', msg.error);
         translationState = 'error';
+        activeTranslationPort = null;
         showMessage(msg.error);
         port.disconnect();
       }
@@ -290,8 +306,9 @@
 
     port.onDisconnect.addListener(() => {
       // Port beklenmedik şekilde kapandıysa ve hâlâ translating durumdaysa
-      if (translationState === 'translating') {
+      if (translationState === 'translating' && epoch === translationEpoch) {
         translationState = 'error';
+        activeTranslationPort = null;
         showMessage('Bağlantı koptu');
       }
     });
@@ -441,6 +458,11 @@
   }
 
   function cleanup() {
+    // Aktif çeviri port'unu kapat
+    if (activeTranslationPort) {
+      activeTranslationPort.disconnect();
+      activeTranslationPort = null;
+    }
     if (currentVideo) {
       enableNativeTextTracks(currentVideo);
       currentVideo.removeEventListener('timeupdate', onTimeUpdate);

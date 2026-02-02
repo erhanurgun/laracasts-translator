@@ -68,12 +68,12 @@ const StorageBg = {
 // --- Cache Fingerprint ---
 
 function createFingerprint(cues) {
-  const sample = cues.slice(0, 3).map(c => c.text).join('|');
+  const allText = cues.map(c => c.text).join('|');
   let hash = 0;
-  for (let i = 0; i < sample.length; i++) {
-    hash = ((hash << 5) - hash + sample.charCodeAt(i)) | 0;
+  for (let i = 0; i < allText.length; i++) {
+    hash = ((hash << 5) - hash + allText.charCodeAt(i)) | 0;
   }
-  return `${cues.length}:${hash}`;
+  return `v2:${cues.length}:${hash}`;
 }
 
 // --- OpenAI Çeviri ---
@@ -91,12 +91,15 @@ Rules:
 7. Return ONLY the numbered translations, nothing else.
 8. Format each translation on its own line as: NUMBER. TRANSLATION
 9. Do not add blank lines between translations.
-10. Do not include the original text, only the translation.`;
+10. Do not include the original text, only the translation.
+11. CRITICAL: You MUST output EXACTLY the same number of translations as input lines.
+12. NEVER combine, skip, merge, or reorder input lines. Each numbered line MUST have its own separate numbered translation.
+13. Even for very short lines like "Okay." or "So.", translate them individually with their own number.`;
 
 const BATCH_SIZE = 50;
 const MAX_RETRIES = 3;
 
-async function translateBatch(texts, apiKey) {
+async function translateBatch(texts, apiKey, retryCount = 0) {
   const numbered = texts.map((t, i) => `${i + 1}. ${t}`).join('\n');
 
   const body = {
@@ -162,10 +165,20 @@ async function translateBatch(texts, apiKey) {
         }
       }
 
-      // Validasyon
+      // Strict count validation + retry
       const finalCount = Object.keys(translations).length;
       if (finalCount !== texts.length) {
-        console.warn(`LCT: Çeviri sayısı uyuşmuyor (${finalCount}/${texts.length}), eksikler boş olacak`);
+        console.warn(`LCT: Çeviri sayısı uyuşmuyor (${finalCount}/${texts.length}), retry #${retryCount}`);
+
+        if (retryCount < 2) {
+          // Batch'i yarıya böl ve ayrı ayrı çevir
+          const mid = Math.ceil(texts.length / 2);
+          const firstHalf = await translateBatch(texts.slice(0, mid), apiKey, retryCount + 1);
+          const secondHalf = await translateBatch(texts.slice(mid), apiKey, retryCount + 1);
+          return [...firstHalf, ...secondHalf];
+        }
+        // 2 retry sonrası: mevcut sonucu kullan (eksikler boş kalır)
+        console.warn(`LCT: Retry tükendi, mevcut sonuç kullanılıyor (${finalCount}/${texts.length})`);
       }
 
       return texts.map((_, i) => translations[i] || '');
