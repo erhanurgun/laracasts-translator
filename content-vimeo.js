@@ -30,6 +30,7 @@
   let translationEpoch = 0;
   let translationRetryCount = 0;
   const MAX_TRANSLATION_RETRIES = 2;
+  let translationProgress = { current: 0, total: 0 };
 
   // --- Başlat ---
 
@@ -271,11 +272,14 @@
       if (epoch !== translationEpoch) return;
 
       if (msg.type === 'PROGRESS') {
+        translationProgress = { current: msg.current, total: msg.total };
         if (msg.cached) {
           showMessage('Önbellekten yükleniyor...');
-        } else {
+        } else if (!hasPartialTranslation()) {
+          // İlk batch henüz gelmedi → statusMessage ile ilerleme göster
           showMessage(`Çevriliyor... (${msg.current}/${msg.total})`);
         }
+        // İlk batch geldiyse → statusMessage set etme, onTimeUpdate halleder
       } else if (msg.type === 'BATCH_RESULT') {
         // Progresif batch: çevirileri anında uygula
         const { startIndex, cues: batchCues } = msg;
@@ -285,6 +289,8 @@
           }
         }
         console.log(`LCT: Batch ${Math.floor(startIndex / 50) + 1} uygulandı (index ${startIndex}-${startIndex + batchCues.length - 1})`);
+        // İlk batch geldi → normal render moduna geç
+        statusMessage = null;
       } else if (msg.type === 'COMPLETE') {
         currentCues = msg.cues;
         translationState = 'done';
@@ -399,6 +405,19 @@
     const time = currentVideo.currentTime;
     const activeCue = findActiveCue(time);
 
+    // Progresif çeviri: ilk batch geldikten sonra normal altyazı + boşluklarda ilerleme
+    if (translationState === 'translating' && hasPartialTranslation()) {
+      if (activeCue) {
+        renderer.update(
+          settings.showOriginal ? activeCue.text : '',
+          settings.showTranslation ? (activeCue.translation || '') : ''
+        );
+      } else {
+        renderer.update('', `Çevriliyor... (${translationProgress.current}/${translationProgress.total})`);
+      }
+      return;
+    }
+
     // Durum mesajı aktifken: mesajı koru, sadece EN altyazıyı güncelle
     if (statusMessage) {
       if (translationState === 'translating') {
@@ -417,6 +436,10 @@
     } else {
       renderer.update('', '');
     }
+  }
+
+  function hasPartialTranslation() {
+    return currentCues.some(c => c.translation !== '');
   }
 
   /**
@@ -512,6 +535,7 @@
     parsedOriginalCues = [];
     translationState = 'idle';
     translationRetryCount = 0;
+    translationProgress = { current: 0, total: 0 };
     lastVttUrl = null;
   }
 
