@@ -1,0 +1,9 @@
+/node_modules
+/.vscode
+/.idea
+
+.env*
+!.env.example
+
+/.claude
+CLAUDE.md
