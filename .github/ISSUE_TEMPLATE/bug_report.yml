@@ -1,0 +1,94 @@
+name: "Hata Raporu"
+description: "Bir hata bildirmek için bu şablonu kullanın"
+title: "[Hata]: "
+labels: ["hata"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hata raporunuz için teşekkürler! Lütfen aşağıdaki alanları mümkün olduğunca eksiksiz doldurun.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Hata Açıklaması"
+      description: "Hatayı kısaca açıklayın"
+      placeholder: "Çeviri tamamlandıktan sonra altyazılar görünmüyor..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Yeniden Üretme Adımları"
+      description: "Hatayı yeniden oluşturmak için adımları yazın"
+      placeholder: |
+        1. Laracasts'te bir video açın
+        2. Çevirinin tamamlanmasını bekleyin
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Beklenen Davranış"
+      description: "Ne olmasını bekliyordunuz?"
+      placeholder: "Çeviri tamamlandığında Türkçe altyazılar görünmeliydi"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Gerçekleşen Davranış"
+      description: "Bunun yerine ne oldu?"
+      placeholder: "Altyazılar hiç görünmedi"
+    validations:
+      required: true
+
+  - type: input
+    id: chrome-version
+    attributes:
+      label: "Chrome Sürümü"
+      description: "chrome://version adresinden öğrenebilirsiniz"
+      placeholder: "128.0.6613.84"
+    validations:
+      required: true
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: "Eklenti Sürümü"
+      description: "chrome://extensions adresinden öğrenebilirsiniz"
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: "İşletim Sistemi"
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: "Konsol Çıktıları"
+      description: "Chrome DevTools Console'daki hata mesajlarını yapıştırın (varsa)"
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: "Ekran Görüntüleri"
+      description: "Hatayı gösteren ekran görüntüleri ekleyin (varsa)"
+    validations:
+      required: false

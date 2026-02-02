@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Tartışmalar"
+    url: https://github.com/erhanurgun/laracasts-translator/discussions
+    about: "Soru sormak veya fikir paylaşmak için Discussions bölümünü kullanın"

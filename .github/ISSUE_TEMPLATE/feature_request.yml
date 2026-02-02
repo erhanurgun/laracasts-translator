@@ -1,0 +1,49 @@
+name: "Özellik Önerisi"
+description: "Yeni bir özellik önermek için bu şablonu kullanın"
+title: "[Öneri]: "
+labels: ["özellik önerisi"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Özellik öneriniz için teşekkürler! Lütfen aşağıdaki alanları doldurun.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problem / Motivasyon"
+      description: "Bu özelliğe neden ihtiyaç var? Hangi sorunu çözüyor?"
+      placeholder: "Uzun videolarda çeviri ilerlemesini takip edemiyorum..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Önerilen Çözüm"
+      description: "Bu özelliğin nasıl çalışmasını istiyorsunuz?"
+      placeholder: "Video oynatıcının altında bir ilerleme çubuğu gösterilebilir..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatifler"
+      description: "Düşündüğünüz alternatif çözümler var mı?"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: "Kategori"
+      options:
+        - Çeviri
+        - Arayüz
+        - Performans
+        - Önbellek
+        - Ayarlar
+        - Diğer
+    validations:
+      required: true
