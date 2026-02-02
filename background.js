@@ -9,13 +9,15 @@
 
 const StorageBg = {
   async getApiKey() {
+    const { _lct_apiKey } = await chrome.storage.local.get({ _lct_apiKey: '' });
+    if (_lct_apiKey) return _lct_apiKey;
+    // Fallback: migrasyon henüz tamamlanmamış olabilir
     const { apiKey } = await chrome.storage.sync.get({ apiKey: '' });
     return apiKey;
   },
 
   async getSettings() {
-    const defaults = {
-      apiKey: '',
+    const syncDefaults = {
       enabled: true,
       showOriginal: true,
       showTranslation: true,
@@ -24,7 +26,10 @@ const StorageBg = {
       translationColor: '#ffd700',
       bgOpacity: 0.75
     };
-    return chrome.storage.sync.get(defaults);
+    const settings = await chrome.storage.sync.get(syncDefaults);
+    // apiKey local'den gelir
+    settings.apiKey = await this.getApiKey();
+    return settings;
   },
 
   _cacheKey(videoId) {
@@ -178,13 +183,14 @@ async function translateBatch(texts, apiKey) {
   throw lastError || new Error('Çeviri başarısız');
 }
 
-async function translateCues(cues, videoId) {
+async function translateCues(cues, videoId, onProgress) {
   const fingerprint = createFingerprint(cues);
 
   // Önce cache kontrol (fingerprint ile doğrula)
   const cached = await StorageBg.getCachedTranslation(videoId);
   if (cached && cached.cues && cached.cues.length === cues.length) {
     if (cached.fingerprint === fingerprint) {
+      if (onProgress) onProgress({ cached: true });
       return cached.cues;
     }
     console.warn('LCT: Cache fingerprint uyuşmuyor, yeniden çeviriliyor');
@@ -197,9 +203,13 @@ async function translateCues(cues, videoId) {
 
   const texts = cues.map(c => c.text);
   const allTranslations = [];
+  const totalBatches = Math.ceil(texts.length / BATCH_SIZE);
 
   // Batch'ler halinde çevir
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
+    if (onProgress) onProgress({ current: batchIndex, total: totalBatches });
+
     const batch = texts.slice(i, i + BATCH_SIZE);
     const translated = await translateBatch(batch, apiKey);
     allTranslations.push(...translated);
@@ -225,10 +235,60 @@ async function fetchVTT(url) {
   return response.text();
 }
 
+// --- Laracasts tab'a durum bildir ---
+
+function sendStatusToTab(tabId, status, error) {
+  chrome.tabs.sendMessage(tabId, {
+    type: 'TRANSLATION_STATUS', status, error
+  }).catch(() => {});
+}
+
+// --- Port-based Çeviri (ilerleme destekli) ---
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'translate') return;
+
+  // Sender doğrulama
+  const senderUrl = port.sender?.url || '';
+  if (!senderUrl.includes('player.vimeo.com')) {
+    port.disconnect();
+    return;
+  }
+
+  port.onMessage.addListener(async (msg) => {
+    if (msg.type === 'TRANSLATE_CUES') {
+      const tabId = port.sender?.tab?.id;
+      let wasCached = false;
+
+      // Laracasts'e durum bildir
+      if (tabId) sendStatusToTab(tabId, 'translating');
+
+      try {
+        const result = await translateCues(msg.cues, msg.videoId, (progress) => {
+          if (progress.cached) wasCached = true;
+          port.postMessage({ type: 'PROGRESS', ...progress });
+        });
+        port.postMessage({ type: 'COMPLETE', cues: result });
+        if (tabId) sendStatusToTab(tabId, wasCached ? 'cached' : 'done');
+      } catch (err) {
+        port.postMessage({ type: 'ERROR', error: err.message || 'Çeviri hatası' });
+        if (tabId) sendStatusToTab(tabId, 'error', err.message);
+      }
+    }
+  });
+});
+
 // --- Mesaj Dinleyicisi ---
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'TRANSLATE_CUES') {
+    // Sender doğrulama
+    const senderUrl = sender?.url || '';
+    if (!senderUrl.includes('player.vimeo.com')) {
+      sendResponse({ success: false, error: 'Yetkisiz kaynak' });
+      return true;
+    }
+
     translateCues(message.cues, message.videoId)
       .then(result => sendResponse({ success: true, cues: result }))
       .catch(err => sendResponse({ success: false, error: err.message || 'Çeviri hatası' }));
@@ -244,7 +304,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'GET_SETTINGS') {
     StorageBg.getSettings()
-      .then(settings => sendResponse({ success: true, settings }))
+      .then(settings => {
+        // Content script'lere apiKey gönderme — sadece varlık bilgisi yeter
+        const { apiKey, ...safeSettings } = settings;
+        safeSettings.hasApiKey = !!apiKey;
+        sendResponse({ success: true, settings: safeSettings });
+      })
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
@@ -259,5 +324,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
+
+// --- API Key Migrasyon (sync → local) ---
+
+async function migrateApiKey() {
+  const { apiKey } = await chrome.storage.sync.get({ apiKey: '' });
+  if (apiKey) {
+    await chrome.storage.local.set({ _lct_apiKey: apiKey });
+    await chrome.storage.sync.remove('apiKey');
+    console.log('LCT: API key local storage\'a taşındı');
+  }
+}
+
+migrateApiKey();
 
 console.log('Laracasts Translator: Background service worker başlatıldı');

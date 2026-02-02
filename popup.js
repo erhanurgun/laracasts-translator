@@ -46,6 +46,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearTimeout(apiKeyTimer);
     apiKeyTimer = setTimeout(async () => {
       const key = els.apiKey.value.trim();
+
+      // Format doğrulama
+      if (key && !key.startsWith('sk-')) {
+        els.apiKeyStatus.textContent = 'Geçersiz format — OpenAI key "sk-" ile başlamalı';
+        els.apiKeyStatus.className = 'status error';
+        return;
+      }
+
       await Storage.setApiKey(key);
       if (key) {
         els.apiKeyStatus.textContent = 'API key kaydedildi. Aktif videolar için çeviri başlatılıyor...';

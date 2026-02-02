@@ -19,14 +19,14 @@
   "content_scripts": [
     {
       "matches": ["https://player.vimeo.com/*"],
-      "js": ["lib/storage.js", "lib/vtt-parser.js", "lib/subtitle-renderer.js", "content-vimeo.js"],
+      "js": ["lib/vtt-parser.js", "lib/subtitle-renderer.js", "content-vimeo.js"],
       "css": ["styles/subtitle-overlay.css"],
       "all_frames": true,
       "run_at": "document_idle"
     },
     {
       "matches": ["https://laracasts.com/*"],
-      "js": ["lib/storage.js", "content-laracasts.js"],
+      "js": ["content-laracasts.js"],
       "run_at": "document_idle"
     }
   ],
@@ -38,6 +38,9 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none';"
   },
   "icons": {
     "16": "icons/icon16.png",

@@ -207,7 +207,7 @@
       startSync();
 
       // API key kontrolü
-      if (!settings.apiKey) {
+      if (!settings.hasApiKey) {
         translationState = 'pending_key';
         showMessage('API key gerekli — Eklenti ayarlarından girin');
         console.log('LCT: API key yok, çeviri beklemede');
@@ -224,38 +224,48 @@
     }
   }
 
-  async function triggerTranslation() {
+  function triggerTranslation() {
     if (parsedOriginalCues.length === 0) return;
 
     translationState = 'translating';
     showMessage('Çeviriliyor...');
 
     const videoId = extractVideoId();
+    const port = chrome.runtime.connect({ name: 'translate' });
 
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'TRANSLATE_CUES',
-        cues: parsedOriginalCues,
-        videoId: videoId
-      });
-
-      if (response && response.success) {
-        currentCues = response.cues;
+    port.onMessage.addListener((msg) => {
+      if (msg.type === 'PROGRESS') {
+        if (msg.cached) {
+          showMessage('Önbellekten yükleniyor...');
+        } else {
+          showMessage(`Çevriliyor... (${msg.current}/${msg.total})`);
+        }
+      } else if (msg.type === 'COMPLETE') {
+        currentCues = msg.cues;
         translationState = 'done';
-        showMessage('');
+        showMessage('Çeviri tamamlandı');
+        setTimeout(() => {
+          if (translationState === 'done') showMessage('');
+        }, 2000);
+        port.disconnect();
         console.log('LCT: Çeviri tamamlandı');
-      } else {
-        const errorMsg = response ? response.error : 'Bağlantı hatası';
-        console.warn('LCT: Çeviri hatası:', errorMsg);
+      } else if (msg.type === 'ERROR') {
+        console.warn('LCT: Çeviri hatası:', msg.error);
         translationState = 'error';
-        showMessage(errorMsg);
-        // Orijinal altyazılarla devam et (graceful degradation)
+        showMessage(msg.error);
+        port.disconnect();
       }
-    } catch (err) {
-      console.error('LCT: Çeviri isteği hatası:', err);
-      translationState = 'error';
-      showMessage('Çeviri sırasında hata oluştu');
-    }
+    });
+
+    port.onDisconnect.addListener(() => {
+      // Port beklenmedik şekilde kapandıysa ve hâlâ translating durumdaysa
+      if (translationState === 'translating') {
+        translationState = 'error';
+        showMessage('Bağlantı koptu');
+      }
+    });
+
+    port.postMessage({ type: 'TRANSLATE_CUES', cues: parsedOriginalCues, videoId });
   }
 
   async function fetchVTT(url) {
@@ -354,9 +364,7 @@
   function showMessage(msg) {
     if (!renderer && currentVideo) ensureRenderer();
     if (renderer) {
-      if (msg) {
-        renderer.update('', msg);
-      }
+      renderer.update('', msg || '');
     }
   }
 
@@ -417,7 +425,7 @@
   function listenForMessages() {
     // Birincil yöntem: chrome.storage.onChanged — iframe'lerde de çalışır
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'sync') {
+      if (area === 'sync' || (area === 'local' && changes._lct_apiKey)) {
         onSettingsChanged();
       }
     });
@@ -435,7 +443,6 @@
     // Debounce: birden fazla storage key aynı anda değişebilir
     clearTimeout(settingsChangeDebounce);
     settingsChangeDebounce = setTimeout(async () => {
-      const oldApiKey = settings ? settings.apiKey : '';
       settings = await getSettings();
       const wasEnabled = isEnabled;
       isEnabled = settings.enabled;
@@ -456,7 +463,7 @@
       }
 
       // API key eklendiyse ve çeviri beklemedeyse → çeviriyi tetikle
-      if (translationState === 'pending_key' && settings.apiKey && parsedOriginalCues.length > 0) {
+      if (translationState === 'pending_key' && settings.hasApiKey && parsedOriginalCues.length > 0) {
         console.log('LCT: API key algılandı, çeviri başlatılıyor');
         triggerTranslation();
       }
