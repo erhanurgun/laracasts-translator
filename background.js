@@ -5,6 +5,25 @@
  * - Mesaj yönlendirme
  */
 
+// --- Keep-Alive (Service Worker uyku önleme) ---
+
+const KEEPALIVE_ALARM = 'lct-keepalive';
+
+function startKeepAlive() {
+  chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.4 });
+}
+
+function stopKeepAlive() {
+  chrome.alarms.clear(KEEPALIVE_ALARM);
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === KEEPALIVE_ALARM) {
+    // storage.local.get() çağrısı service worker'ı aktif tutar
+    chrome.storage.local.get('_lct_keepalive');
+  }
+});
+
 // --- Storage helpers (service worker'da lib/storage.js yüklenemez) ---
 
 const StorageBg = {
@@ -114,14 +133,20 @@ async function translateBatch(texts, apiKey, retryCount = 0) {
   let lastError;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (response.status === 401) {
         throw { status: 401, message: 'Geçersiz API key' };
@@ -196,7 +221,7 @@ async function translateBatch(texts, apiKey, retryCount = 0) {
   throw lastError || new Error('Çeviri başarısız');
 }
 
-async function translateCues(cues, videoId, onProgress) {
+async function translateCues(cues, videoId, onProgress, onBatchComplete) {
   const fingerprint = createFingerprint(cues);
 
   // Önce cache kontrol (fingerprint ile doğrula)
@@ -214,30 +239,45 @@ async function translateCues(cues, videoId, onProgress) {
     throw { status: 0, message: 'API key gerekli' };
   }
 
-  const texts = cues.map(c => c.text);
-  const allTranslations = [];
-  const totalBatches = Math.ceil(texts.length / BATCH_SIZE);
+  startKeepAlive();
 
-  // Batch'ler halinde çevir
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
-    if (onProgress) onProgress({ current: batchIndex, total: totalBatches });
+  try {
+    const texts = cues.map(c => c.text);
+    const allTranslations = [];
+    const totalBatches = Math.ceil(texts.length / BATCH_SIZE);
 
-    const batch = texts.slice(i, i + BATCH_SIZE);
-    const translated = await translateBatch(batch, apiKey);
-    allTranslations.push(...translated);
+    // Batch'ler halinde çevir
+    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+      const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
+      if (onProgress) onProgress({ current: batchIndex, total: totalBatches });
+
+      const batch = texts.slice(i, i + BATCH_SIZE);
+      const translated = await translateBatch(batch, apiKey);
+      allTranslations.push(...translated);
+
+      // Progresif batch gönderimi
+      if (onBatchComplete) {
+        const batchCues = translated.map((tr, j) => ({
+          ...cues[i + j],
+          translation: tr
+        }));
+        onBatchComplete({ startIndex: i, cues: batchCues });
+      }
+    }
+
+    // Cue'lara çevirileri ekle
+    const result = cues.map((cue, j) => ({
+      ...cue,
+      translation: allTranslations[j] || ''
+    }));
+
+    // Cache'e kaydet (fingerprint ile)
+    await StorageBg.setCachedTranslation(videoId, result, fingerprint);
+
+    return result;
+  } finally {
+    stopKeepAlive();
   }
-
-  // Cue'lara çevirileri ekle
-  const result = cues.map((cue, i) => ({
-    ...cue,
-    translation: allTranslations[i] || ''
-  }));
-
-  // Cache'e kaydet (fingerprint ile)
-  await StorageBg.setCachedTranslation(videoId, result, fingerprint);
-
-  return result;
 }
 
 // --- VTT Fetch (CORS bypass) ---
@@ -277,14 +317,25 @@ chrome.runtime.onConnect.addListener((port) => {
       if (tabId) sendStatusToTab(tabId, 'translating');
 
       try {
-        const result = await translateCues(msg.cues, msg.videoId, (progress) => {
-          if (progress.cached) wasCached = true;
-          port.postMessage({ type: 'PROGRESS', ...progress });
-        });
-        port.postMessage({ type: 'COMPLETE', cues: result });
+        const safeSend = (message) => {
+          try { port.postMessage(message); } catch (_) { /* port kopmuş olabilir */ }
+        };
+
+        const result = await translateCues(
+          msg.cues,
+          msg.videoId,
+          (progress) => {
+            if (progress.cached) wasCached = true;
+            safeSend({ type: 'PROGRESS', ...progress });
+          },
+          (batchData) => {
+            safeSend({ type: 'BATCH_RESULT', startIndex: batchData.startIndex, cues: batchData.cues });
+          }
+        );
+        safeSend({ type: 'COMPLETE', cues: result });
         if (tabId) sendStatusToTab(tabId, wasCached ? 'cached' : 'done');
       } catch (err) {
-        port.postMessage({ type: 'ERROR', error: err.message || 'Çeviri hatası' });
+        try { port.postMessage({ type: 'ERROR', error: err.message || 'Çeviri hatası' }); } catch (_) {}
         if (tabId) sendStatusToTab(tabId, 'error', err.message);
       }
     }

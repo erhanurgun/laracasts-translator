@@ -28,6 +28,8 @@
   let statusMessage = null;      // Aktif durum mesajı (ilerleme, tamamlandı, hata)
   let activeTranslationPort = null;
   let translationEpoch = 0;
+  let translationRetryCount = 0;
+  const MAX_TRANSLATION_RETRIES = 2;
 
   // --- Başlat ---
 
@@ -252,7 +254,7 @@
 
     // Önceki çeviriyi iptal et
     if (activeTranslationPort) {
-      activeTranslationPort.disconnect();
+      try { activeTranslationPort.disconnect(); } catch (_) {}
       activeTranslationPort = null;
     }
 
@@ -274,11 +276,21 @@
         } else {
           showMessage(`Çevriliyor... (${msg.current}/${msg.total})`);
         }
+      } else if (msg.type === 'BATCH_RESULT') {
+        // Progresif batch: çevirileri anında uygula
+        const { startIndex, cues: batchCues } = msg;
+        for (let i = 0; i < batchCues.length; i++) {
+          if (currentCues[startIndex + i]) {
+            currentCues[startIndex + i].translation = batchCues[i].translation;
+          }
+        }
+        console.log(`LCT: Batch ${Math.floor(startIndex / 50) + 1} uygulandı (index ${startIndex}-${startIndex + batchCues.length - 1})`);
       } else if (msg.type === 'COMPLETE') {
         currentCues = msg.cues;
         translationState = 'done';
+        translationRetryCount = 0; // Başarılı: retry sayacını sıfırla
         activeTranslationPort = null;
-        port.disconnect();
+        try { port.disconnect(); } catch (_) {}
         console.log('LCT: Çeviri tamamlandı');
 
         // Ekranda aktif cue varsa → anında TR çevirisini göster
@@ -312,16 +324,26 @@
         translationState = 'error';
         activeTranslationPort = null;
         showMessage(msg.error);
-        port.disconnect();
+        try { port.disconnect(); } catch (_) {}
       }
     });
 
     port.onDisconnect.addListener(() => {
       // Port beklenmedik şekilde kapandıysa ve hâlâ translating durumdaysa
       if (translationState === 'translating' && epoch === translationEpoch) {
-        translationState = 'error';
         activeTranslationPort = null;
-        showMessage('Bağlantı koptu');
+
+        if (translationRetryCount < MAX_TRANSLATION_RETRIES) {
+          translationRetryCount++;
+          console.warn(`LCT: Bağlantı koptu, yeniden deneniyor (${translationRetryCount}/${MAX_TRANSLATION_RETRIES})`);
+          showMessage(`Bağlantı koptu, yeniden deneniyor (${translationRetryCount}/${MAX_TRANSLATION_RETRIES})...`);
+          setTimeout(() => {
+            if (epoch === translationEpoch) triggerTranslation();
+          }, 2000);
+        } else {
+          translationState = 'error';
+          showMessage('Bağlantı koptu (yeniden denemeler tükendi)');
+        }
       }
     });
 
@@ -489,6 +511,7 @@
     currentCues = [];
     parsedOriginalCues = [];
     translationState = 'idle';
+    translationRetryCount = 0;
     lastVttUrl = null;
   }
 

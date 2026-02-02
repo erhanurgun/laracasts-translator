@@ -4,7 +4,8 @@
   "description": "Laracasts videolarında İngilizce altyazıları Türkçeye çeviren Chrome eklentisi",
   "version": "1.0.0",
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://api.openai.com/*",
