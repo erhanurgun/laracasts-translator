@@ -95,6 +95,18 @@ body {
   margin-bottom: 4px;
 }
 
+.api-key-link {
+  color: #93c5fd;
+  text-decoration: none;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.api-key-link:hover {
+  text-decoration: underline;
+  color: #bfdbfe;
+}
+
 /* API key */
 .api-key-row {
   display: flex;

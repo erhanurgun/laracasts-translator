@@ -3,6 +3,25 @@
 Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını takip eder ve
 proje [Semantic Versioning](https://semver.org/lang/tr/) kullanır.
 
+## [0.2.0] - 2026-02-20
+
+### Eklenen
+
+- Laracasts Vimeo → Mux altyapı geçişine uyum: Inertia `transcriptSegments` desteği
+- Mux Player shadow DOM içinde video algılama (`deepQuerySelector` ile BFS tarama)
+- Transcript segment'lerinin cümle bazlı parçalanması (`splitSegmentToSentences`)
+- Paragraf büyüklüğündeki altyazılar artık 1-2 cümle halinde gösteriliyor
+- Karakter oranına göre zaman dağıtımı ile doğru altyazı senkronizasyonu
+- Kısa parçaların (< 10 karakter) otomatik birleştirilmesi
+- Zamanlama bilgisi olmayan segment'ler için güvenli fallback
+
+### Değişen
+
+- Video algılama: Vimeo iframe yerine Mux Player web component desteği eklendi
+- `findTranscriptSegments()` artık `flatMap` ile cümle bazlı cue dizisi döndürüyor
+- Altyazı kaynağı önceliği: Inertia transcriptSegments > DOM track > TextTrack API
+- Inertia transcriptSegments log mesajları daha açıklayıcı hale getirildi
+
 ## [0.1.0] - 2026-02-02
 
 ### Eklenen
@@ -37,4 +56,5 @@ proje [Semantic Versioning](https://semver.org/lang/tr/) kullanır.
 - Katkıda bulunma rehberi (CONTRIBUTING.md)
 - GitHub issue ve PR şablonları
 
+[0.2.0]: https://github.com/erhanurgun/laracasts-translator/releases/tag/v0.2.0
 [0.1.0]: https://github.com/erhanurgun/laracasts-translator/releases/tag/v0.1.0

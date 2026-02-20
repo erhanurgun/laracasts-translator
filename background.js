@@ -303,7 +303,8 @@ chrome.runtime.onConnect.addListener((port) => {
 
   // Sender doğrulama
   const senderUrl = port.sender?.url || '';
-  if (!senderUrl.includes('player.vimeo.com')) {
+  const isAllowedOrigin = senderUrl.includes('laracasts.com');
+  if (!isAllowedOrigin) {
     port.disconnect();
     return;
   }
@@ -348,7 +349,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'TRANSLATE_CUES') {
     // Sender doğrulama
     const senderUrl = sender?.url || '';
-    if (!senderUrl.includes('player.vimeo.com')) {
+    const isAllowedOrigin = senderUrl.includes('laracasts.com');
+    if (!isAllowedOrigin) {
       sendResponse({ success: false, error: 'Yetkisiz kaynak' });
       return true;
     }
