@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Sürüm-0.1.0-blue" alt="Sürüm">
+  <img src="https://img.shields.io/badge/Sürüm-0.2.1-blue" alt="Sürüm">
   <img src="https://img.shields.io/badge/Lisans-MIT-green" alt="Lisans">
   <img src="https://img.shields.io/badge/Chrome-v116%2B-yellow" alt="Chrome">
   <img src="https://img.shields.io/badge/Manifest-v3-orange" alt="Manifest V3">
@@ -130,7 +130,7 @@ Popup menüsünden aşağıdaki ayarlar değiştirilebilir:
 laracasts-translator/
 ├── manifest.json            # Chrome Extension manifest (V3)
 ├── background.js            # Service Worker - çeviri motoru, OpenAI API, cache
-├── content-vimeo.js         # Vimeo iframe - video algılama, VTT, senkronizasyon
+├── content-player.js         # Video algılama, VTT çekme, altyazı senkronizasyonu
 ├── content-laracasts.js     # Laracasts sayfası - durum göstergesi, SPA takibi
 ├── popup.html / js / css    # Popup ayarlar arayüzü
 ├── lib/
@@ -156,7 +156,7 @@ VTT URL (track element)
 
 ### Mesajlaşma
 
-- **Port-based (long-lived):** `content-vimeo.js` ↔ `background.js` - Çeviri progress güncellemeleri
+- **Port-based (long-lived):** `content-player.js` ↔ `background.js` - Çeviri progress güncellemeleri
 - **Message passing (one-shot):** Ayar değişiklikleri ve durum sorguları
 
 ## Katkı
@@ -171,7 +171,7 @@ Bu proje [MIT Lisansı](LICENSE) ile lisanslanmıştır.
 
 - [Laracasts](https://laracasts.com) - Kaliteli PHP/Laravel eğitim içerikleri
 - [OpenAI](https://openai.com) - GPT-4o çeviri motoru
-- [Vimeo](https://vimeo.com) - Video altyapısı ve VTT desteği
+
 
 ---
 

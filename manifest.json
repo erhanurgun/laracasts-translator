@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Laracasts Translator",
   "description": "Laracasts videolarında İngilizce altyazıları Türkçeye çeviren Chrome eklentisi",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "permissions": [
     "storage",
     "alarms"
@@ -17,7 +17,7 @@
   "content_scripts": [
     {
       "matches": ["https://laracasts.com/*"],
-      "js": ["lib/vtt-parser.js", "lib/subtitle-renderer.js", "content-vimeo.js", "content-laracasts.js"],
+      "js": ["lib/vtt-parser.js", "lib/subtitle-renderer.js", "content-player.js", "content-laracasts.js"],
       "css": ["styles/subtitle-overlay.css"],
       "run_at": "document_idle"
     }
