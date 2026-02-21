@@ -13,21 +13,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     bgOpacity: document.getElementById('bgOpacity'),
     bgOpacityValue: document.getElementById('bgOpacityValue'),
     cacheStats: document.getElementById('cacheStats'),
-    clearCache: document.getElementById('clearCache')
+    clearCache: document.getElementById('clearCache'),
+    resetDefaults: document.getElementById('resetDefaults')
   };
+
+  // Ayar değerlerini UI'a yansıtır (ilk yükleme ve reset için ortak)
+  function applySettingsToUI(settings) {
+    els.enableToggle.checked = settings.enabled;
+    els.showOriginal.checked = settings.showOriginal;
+    els.showTranslation.checked = settings.showTranslation;
+    els.fontSize.value = settings.fontSize;
+    els.fontSizeValue.textContent = settings.fontSize;
+    els.originalColor.value = settings.originalColor;
+    els.translationColor.value = settings.translationColor;
+    els.bgOpacity.value = Math.round(settings.bgOpacity * 100);
+    els.bgOpacityValue.textContent = Math.round(settings.bgOpacity * 100);
+  }
 
   // Ayarları yükle
   const settings = await Storage.getSettings();
-  els.enableToggle.checked = settings.enabled;
+  applySettingsToUI(settings);
   els.apiKey.value = settings.apiKey;
-  els.showOriginal.checked = settings.showOriginal;
-  els.showTranslation.checked = settings.showTranslation;
-  els.fontSize.value = settings.fontSize;
-  els.fontSizeValue.textContent = settings.fontSize;
-  els.originalColor.value = settings.originalColor;
-  els.translationColor.value = settings.translationColor;
-  els.bgOpacity.value = Math.round(settings.bgOpacity * 100);
-  els.bgOpacityValue.textContent = Math.round(settings.bgOpacity * 100);
 
   if (settings.apiKey) {
     els.apiKeyStatus.textContent = 'API key kayıtlı';
@@ -82,25 +88,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     broadcastSettingsChange();
   });
 
+  let fontSizeTimer;
   els.fontSize.addEventListener('input', () => {
     els.fontSizeValue.textContent = els.fontSize.value;
-    Storage.saveSetting('fontSize', parseInt(els.fontSize.value));
-    broadcastSettingsChange();
+    clearTimeout(fontSizeTimer);
+    fontSizeTimer = setTimeout(() => {
+      Storage.saveSetting('fontSize', parseInt(els.fontSize.value));
+      broadcastSettingsChange();
+    }, 300);
   });
 
-  els.originalColor.addEventListener('input', () => {
+  els.originalColor.addEventListener('change', () => {
     Storage.saveSetting('originalColor', els.originalColor.value);
     broadcastSettingsChange();
   });
 
-  els.translationColor.addEventListener('input', () => {
+  els.translationColor.addEventListener('change', () => {
     Storage.saveSetting('translationColor', els.translationColor.value);
     broadcastSettingsChange();
   });
 
+  let bgOpacityTimer;
   els.bgOpacity.addEventListener('input', () => {
     els.bgOpacityValue.textContent = els.bgOpacity.value;
-    Storage.saveSetting('bgOpacity', parseInt(els.bgOpacity.value) / 100);
+    clearTimeout(bgOpacityTimer);
+    bgOpacityTimer = setTimeout(() => {
+      Storage.saveSetting('bgOpacity', parseInt(els.bgOpacity.value) / 100);
+      broadcastSettingsChange();
+    }, 300);
+  });
+
+  // Varsayılana sıfırla (API key hariç)
+  els.resetDefaults.addEventListener('click', async () => {
+    const { apiKey: _ignored, ...defaults } = Storage.defaults;
+    await Storage.saveSettings(defaults);
+    applySettingsToUI(defaults);
     broadcastSettingsChange();
   });
 

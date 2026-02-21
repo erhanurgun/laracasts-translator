@@ -205,9 +205,20 @@ body {
   font-weight: 500;
 }
 
+.btn-secondary {
+  background: #374151;
+  color: #e0e0e0;
+  width: 100%;
+}
+
+.btn-secondary:hover {
+  background: #4b5563;
+}
+
 .btn-danger {
   background: #dc2626;
   color: white;
+  width: 100%;
 }
 
 .btn-danger:hover {

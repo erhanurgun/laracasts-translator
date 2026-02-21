@@ -21,6 +21,17 @@
   let isEnabled = true;
   let videoObserver = null;
   let syncListenerAttached = false;
+  let navigationDebounce = null;
+  let pageChangeTimeout = null;
+  let findVideoObserver = null;
+  let findVideoInterval = null;
+  let videoCheckInterval = null;
+
+  // waitForTracksOrTextTracks() resource takibi (cleanup'tan erişilebilmesi için module-scope)
+  let waitTrackObserver = null;
+  let waitTrackInterval = null;
+  let waitTrackVideo = null;
+  let waitTrackHandler = null;
 
   // Çeviri state yönetimi
   let lastVttUrl = null;
@@ -33,15 +44,75 @@
   const MAX_TRANSLATION_RETRIES = 2;
   let translationProgress = { current: 0, total: 0 };
 
+  // Cache fingerprint hesaplama (background.js ile aynı algoritma — değişirse her ikisi güncellenmeli)
+  function createFingerprint(cues) {
+    const allText = cues.map(c => c.text).join('|');
+    let hash = 0;
+    for (let i = 0; i < allText.length; i++) {
+      hash = ((hash << 5) - hash + allText.charCodeAt(i)) | 0;
+    }
+    return `v2:${cues.length}:${hash}`;
+  }
+
   // --- Başlat ---
 
   async function init() {
     settings = await getSettings();
     isEnabled = settings.enabled;
-    if (!isEnabled) return;
-
-    findVideo();
     listenForMessages();
+    watchForNavigation();
+    if (!isEnabled) return;
+    findVideo();
+  }
+
+  // --- SPA Navigasyon Algılama ---
+
+  /**
+   * Inertia SPA navigasyonunu algılar.
+   * history.pushState/replaceState intercept + popstate event.
+   * Not: content-laracasts.js de pushState patch'liyor; script yükleme sırasına göre
+   * content-player.js ÖNCE patch'ler, content-laracasts.js üzerine patch'ler.
+   * Her wrapper bir öncekini apply ile çağırdığı için chain doğru çalışır.
+   */
+  function watchForNavigation() {
+    let lastUrl = location.href;
+
+    const onUrlChange = () => {
+      const newUrl = location.href;
+      if (newUrl === lastUrl) return;
+      lastUrl = newUrl;
+      onPageChanged();
+    };
+
+    // Inertia SPA navigasyon algılama:
+    // Inertia pushState → URL güncellenir → Vue DOM'u re-render eder →
+    // MutationObserver tetiklenir → location.href kontrolü → navigasyon algılanır.
+    // Not: pushState intercept isolated world nedeniyle çalışmaz.
+    const navObserver = new MutationObserver(onUrlChange);
+    navObserver.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true
+    });
+
+    // Browser back/forward
+    window.addEventListener('popstate', () => {
+      setTimeout(onUrlChange, 50);
+    });
+  }
+
+  /**
+   * Sayfa değiştiğinde eski state'i temizleyip yeni videoyu arar.
+   */
+  function onPageChanged() {
+    clearTimeout(navigationDebounce);
+    clearTimeout(pageChangeTimeout);
+    cleanup();
+    pageChangeTimeout = setTimeout(async () => {
+      pageChangeTimeout = null;
+      settings = await getSettings();
+      isEnabled = settings.enabled;
+      if (isEnabled) findVideo();
+    }, 800);
   }
 
   // --- Video Element Tespiti ---
@@ -51,7 +122,7 @@
    * container: overlay'in ekleneceği yer (shadow DOM dışı eleman).
    */
   function findVideoElement() {
-    // 1) Doğrudan DOM'da video (Vimeo iframe senaryosu)
+    // 1) Doğrudan DOM'da video
     let video = document.querySelector('video');
     if (video) return { video, container: null };
 
@@ -98,53 +169,49 @@
   }
 
   function findVideo() {
+    // Önceki aramayı temizle
+    if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
+    if (findVideoInterval) { clearInterval(findVideoInterval); findVideoInterval = null; }
+
     let attempts = 0;
     const maxAttempts = 30;
 
     const check = () => {
       const result = findVideoElement();
       if (result) {
+        if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
+        if (findVideoInterval) { clearInterval(findVideoInterval); findVideoInterval = null; }
         onVideoFound(result.video, result.container);
-        return;
+        return true;
       }
       attempts++;
-      if (attempts >= maxAttempts) {
-        console.log('LCT: Video bulunamadı (timeout)');
-        return;
-      }
+      return false;
     };
 
-    // Hemen kontrol et
-    check();
-    if (currentVideo) return;
+    if (check()) return;
 
     // MutationObserver + polling kombinasyonu
-    const observer = new MutationObserver(() => {
-      if (!currentVideo) {
-        const result = findVideoElement();
-        if (result) {
-          observer.disconnect();
-          onVideoFound(result.video, result.container);
-        }
-      }
+    findVideoObserver = new MutationObserver(() => {
+      if (!currentVideo) check();
     });
 
-    observer.observe(document.body || document.documentElement, {
+    findVideoObserver.observe(document.body || document.documentElement, {
       childList: true,
       subtree: true
     });
 
     // Yedek polling (shadow DOM içindeki değişiklikler MutationObserver'a yansımaz)
-    const interval = setInterval(() => {
+    findVideoInterval = setInterval(() => {
       if (currentVideo) {
-        clearInterval(interval);
-        observer.disconnect();
+        clearInterval(findVideoInterval); findVideoInterval = null;
+        if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
         return;
       }
-      check();
+      if (check()) return;
       if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        observer.disconnect();
+        clearInterval(findVideoInterval); findVideoInterval = null;
+        if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
+        console.log('LCT: Video bulunamadı (timeout)');
       }
     }, 500);
   }
@@ -162,7 +229,7 @@
     showMessage('Altyazılar aranıyor...');
 
     // 0) Laracasts Inertia transcriptSegments (en yüksek öncelik)
-    const transcriptCues = findTranscriptSegments();
+    const transcriptCues = await findTranscriptSegments();
     if (transcriptCues) {
       disableNativeTextTracks(video);
       await processCues(transcriptCues);
@@ -269,7 +336,7 @@
   }
 
   /**
-   * Vimeo, altyazıları DOM'a <track> elemanı olarak eklemez;
+   * Bazı player'lar altyazıları DOM'a <track> elemanı olarak eklemez;
    * JavaScript TextTrack API ile programatik yükler.
    * Bu fonksiyon video.textTracks üzerinden cue'lara erişir.
    */
@@ -338,15 +405,43 @@
   }
 
   /**
+   * Stale data-page durumunda mevcut URL'e GET request atıp
+   * taze Inertia page data'sını çeker.
+   */
+  async function fetchFreshPageData() {
+    try {
+      const resp = await fetch(location.href);
+      const html = await resp.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const pageEl = doc.querySelector('[data-page]');
+      if (!pageEl) return null;
+      return JSON.parse(pageEl.getAttribute('data-page'));
+    } catch (e) {
+      console.warn('LCT: Sayfa verisi çekme hatası:', e);
+      return null;
+    }
+  }
+
+  /**
    * Inertia data-page prop'larından transcriptSegments verisini çıkarır.
    * Laracasts, Mux geçişiyle transcript'leri sayfaya JSON olarak gömüyor.
    */
-  function findTranscriptSegments() {
+  async function findTranscriptSegments() {
     if (!window.location.hostname.includes('laracasts.com')) return null;
     try {
       const pageEl = document.querySelector('[data-page]');
       if (!pageEl) return null;
-      const pageData = JSON.parse(pageEl.getAttribute('data-page'));
+      const dataPage = pageEl.getAttribute('data-page');
+      if (!dataPage) return null;
+      let pageData = JSON.parse(dataPage);
+
+      // Stale data-page kontrolü: Inertia url alanı vs mevcut URL
+      if (pageData.url && pageData.url !== location.pathname) {
+        console.log('LCT: data-page stale, sayfa verisi yeniden çekiliyor');
+        pageData = await fetchFreshPageData();
+        if (!pageData) return null;
+      }
+
       // transcriptSegments doğrudan props içinde veya iç içe olabilir
       const segments = findDeep(pageData.props, 'transcriptSegments');
       if (!Array.isArray(segments) || segments.length === 0) return null;
@@ -358,7 +453,8 @@
         endTime: seg.endTime,
         text: seg.text.replace(/<[^>]*>/g, '')
       }));
-      const cues = mapped.flatMap(seg => splitSegmentToSentences(seg));
+      const sentenceCues = mapped.flatMap(seg => splitSegmentToSentences(seg));
+      const cues = sentenceCues.flatMap(c => splitLongCue(c));
       console.log(`LCT: Cümle bazlı parçalama sonrası ${cues.length} cue oluştu`);
       return cues;
     } catch (e) {
@@ -425,6 +521,72 @@
   }
 
   /**
+   * 70+ karakter uzunluğundaki cue'ları doğal kırılma noktalarından böler.
+   * Virgül veya bağlaçtan (and, or, but, so, that, which vb.) ortaya en yakın
+   * noktada ikiye böler. Kırılma noktası yoksa en yakın boşluktan böler.
+   * Recursive: parçalar hâlâ uzunsa tekrar böler.
+   * Zaman dağılımı karakter oranıyla yapılır.
+   */
+  function splitLongCue(cue, maxLen = 70) {
+    if (cue.text.length <= maxLen) return [cue];
+
+    const text = cue.text;
+    const mid = Math.floor(text.length / 2);
+
+    // Kırılma noktası bul: virgül veya bağlaç (ortaya en yakın)
+    const breakPattern = /,\s|\s(?:and|or|but|so|that|which|where|when|because|if|while|after|before|since)\s/gi;
+    let bestPos = -1;
+    let bestDist = Infinity;
+    let match;
+
+    while ((match = breakPattern.exec(text)) !== null) {
+      const pos = match.index + match[0].indexOf(' ');
+      const dist = Math.abs(pos - mid);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestPos = pos;
+      }
+    }
+
+    // Kırılma noktası yoksa en yakın boşluktan böl
+    if (bestPos === -1) {
+      for (let offset = 0; offset < mid; offset++) {
+        if (text[mid + offset] === ' ') { bestPos = mid + offset; break; }
+        if (text[mid - offset] === ' ') { bestPos = mid - offset; break; }
+      }
+    }
+
+    // Hiç boşluk yoksa (çok nadir) olduğu gibi döndür
+    if (bestPos <= 0 || bestPos >= text.length - 1) return [cue];
+
+    const part1Text = text.slice(0, bestPos).trim();
+    const part2Text = text.slice(bestPos).trim();
+
+    if (!part1Text || !part2Text) return [cue];
+
+    // Zaman dağılımı karakter oranıyla
+    const totalChars = part1Text.length + part2Text.length;
+    const duration = cue.endTime - cue.startTime;
+    const splitTime = cue.startTime + duration * (part1Text.length / totalChars);
+
+    const part1 = {
+      id: cue.id + '_a',
+      startTime: Math.round(cue.startTime * 1000) / 1000,
+      endTime: Math.round(splitTime * 1000) / 1000,
+      text: part1Text
+    };
+    const part2 = {
+      id: cue.id + '_b',
+      startTime: Math.round(splitTime * 1000) / 1000,
+      endTime: Math.round(cue.endTime * 1000) / 1000,
+      text: part2Text
+    };
+
+    // Recursive: parçalar hâlâ uzunsa tekrar böl
+    return [...splitLongCue(part1, maxLen), ...splitLongCue(part2, maxLen)];
+  }
+
+  /**
    * Obje ağacında bir anahtarı özyinelemeli arar.
    * Inertia prop yapısı farklı derinliklerde olabilir (props.lesson.transcriptSegments vb.)
    */
@@ -440,44 +602,60 @@
     return null;
   }
 
+  /**
+   * waitForTracksOrTextTracks() tarafından oluşturulan observer/interval/handler'ları temizler.
+   * Module-scope değişkenler sayesinde cleanup()'tan da erişilebilir — orphan resource sızıntısını önler.
+   */
+  function cleanupWaitTrack() {
+    if (waitTrackObserver) { waitTrackObserver.disconnect(); waitTrackObserver = null; }
+    if (waitTrackInterval) { clearInterval(waitTrackInterval); waitTrackInterval = null; }
+    if (waitTrackVideo && waitTrackHandler) {
+      waitTrackVideo.textTracks.removeEventListener('addtrack', waitTrackHandler);
+    }
+    waitTrackVideo = null;
+    waitTrackHandler = null;
+  }
+
   function waitForTracksOrTextTracks(video) {
+    // Önceki beklemeyi temizle (SPA navigasyon sonrası yetim kalmasın)
+    cleanupWaitTrack();
+
     let resolved = false;
     let trackAttempts = 0;
     const maxAttempts = 30; // 30 saniye (1sn aralık)
 
+    waitTrackVideo = video;
+
     function done() {
       if (resolved) return false;
       resolved = true;
-      clearInterval(interval);
-      trackObserver.disconnect();
-      video.textTracks.removeEventListener('addtrack', onAddTrack);
+      cleanupWaitTrack();
       return true;
     }
 
     // 1) DOM <track> elemanları için MutationObserver
-    const trackObserver = new MutationObserver(() => {
+    waitTrackObserver = new MutationObserver(() => {
       if (resolved) return;
       const url = findVTTUrl(video);
       if (url && done()) {
         processVTT(url);
       }
     });
-    trackObserver.observe(video, { childList: true, subtree: true });
+    waitTrackObserver.observe(video, { childList: true, subtree: true });
 
     // 2) TextTrack API: addtrack event'i
-    function onAddTrack() {
+    waitTrackHandler = function onAddTrack() {
       if (resolved) return;
-      // Yeni track eklendiğinde cue'ları kontrol et
       const cues = findTextTrackCues(video);
       if (cues && done()) {
         disableNativeTextTracks(video);
         processCues(cues);
       }
-    }
-    video.textTracks.addEventListener('addtrack', onAddTrack);
+    };
+    video.textTracks.addEventListener('addtrack', waitTrackHandler);
 
     // 3) Yedek polling - her iki kaynağı da kontrol eder
-    const interval = setInterval(() => {
+    waitTrackInterval = setInterval(() => {
       if (resolved) return;
       trackAttempts++;
 
@@ -520,8 +698,9 @@
         return;
       }
 
-      // Cue'ları startTime'a göre sırala
+      // Cue'ları startTime'a göre sırala ve uzun olanları böl
       cues.sort((a, b) => a.startTime - b.startTime);
+      cues = cues.flatMap(c => splitLongCue(c));
 
       // State'e kaydet
       lastVttUrl = null;
@@ -542,8 +721,8 @@
         return;
       }
 
-      // Çeviriyi başlat
-      await triggerTranslation();
+      // Çeviriyi başlat (önce cache kontrol)
+      await checkCacheAndTranslate();
 
     } catch (err) {
       console.error('LCT: Pipeline hatası:', err);
@@ -565,7 +744,7 @@
       }
 
       // Parse et
-      const cues = VTTParser.parse(vttText);
+      let cues = VTTParser.parse(vttText);
       if (cues.length === 0) {
         showMessage('Altyazı bulunamadı');
         return;
@@ -573,8 +752,9 @@
 
       console.log(`LCT: ${cues.length} altyazı satırı bulundu`);
 
-      // Cue'ları startTime'a göre sırala (senkronizasyon güvenilirliği)
+      // Cue'ları startTime'a göre sırala ve uzun olanları böl
       cues.sort((a, b) => a.startTime - b.startTime);
+      cues = cues.flatMap(c => splitLongCue(c));
 
       // State'e kaydet
       lastVttUrl = vttUrl;
@@ -595,14 +775,44 @@
         return;
       }
 
-      // Çeviriyi başlat
-      await triggerTranslation();
+      // Çeviriyi başlat (önce cache kontrol)
+      await checkCacheAndTranslate();
 
     } catch (err) {
       console.error('LCT: Pipeline hatası:', err);
       translationState = 'error';
       showMessage('Bir hata oluştu');
     }
+  }
+
+  async function checkCacheAndTranslate() {
+    if (parsedOriginalCues.length === 0) return;
+
+    const videoId = extractVideoId();
+    const cacheKey = `translation_${videoId}_tr`;
+
+    try {
+      const result = await chrome.storage.local.get(cacheKey);
+      const cached = result[cacheKey];
+
+      if (cached && cached.cues && cached.cues.length === parsedOriginalCues.length) {
+        const fingerprint = createFingerprint(parsedOriginalCues);
+        if (cached.fingerprint === fingerprint) {
+          console.log('LCT: Cache hit — çeviriler önbellekten yükleniyor');
+          currentCues = cached.cues;
+          translationState = 'done';
+          translationRetryCount = 0;
+          showMessage('Önbellekten yüklendi');
+          setTimeout(() => { if (translationState === 'done') showMessage(''); }, 2000);
+          return;
+        }
+        console.log('LCT: Cache fingerprint uyuşmuyor, yeniden çevriliyor');
+      }
+    } catch (e) {
+      console.warn('LCT: Cache ön kontrolü hatası:', e);
+    }
+
+    triggerTranslation();
   }
 
   function triggerTranslation() {
@@ -745,9 +955,9 @@
     const pathMatch = window.location.pathname.match(/\/episodes\/(\d+)/);
     if (pathMatch) return `laracasts_${pathMatch[1]}`;
 
-    // 3) Vimeo iframe fallback
-    const vimeoMatch = window.location.pathname.match(/\/video\/(\d+)/);
-    if (vimeoMatch) return vimeoMatch[1];
+    // 3) Video ID fallback
+    const videoPathMatch = window.location.pathname.match(/\/video\/(\d+)/);
+    if (videoPathMatch) return videoPathMatch[1];
 
     // 4) Son çare
     const params = new URLSearchParams(window.location.search);
@@ -866,6 +1076,7 @@
 
   function watchVideoChanges(video) {
     if (videoObserver) videoObserver.disconnect();
+    if (videoCheckInterval) { clearInterval(videoCheckInterval); videoCheckInterval = null; }
 
     videoObserver = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -882,17 +1093,44 @@
 
     videoObserver.observe(video, { attributes: true, attributeFilter: ['src'] });
 
-    // Mux Player container varsa playback-id değişikliğini de izle
     if (currentContainer && currentContainer.tagName === 'MUX-PLAYER') {
       videoObserver.observe(currentContainer, { attributes: true, attributeFilter: ['playback-id'] });
+
+      // Mux Player video element değişimini izle (shadow DOM içerisinde swap olabilir)
+      videoCheckInterval = setInterval(() => {
+        const actualVideo = currentContainer.media?.nativeEl;
+        if (actualVideo && actualVideo !== currentVideo) {
+          console.log('LCT: Mux Player video element değişti, yeniden başlatılıyor');
+          clearInterval(videoCheckInterval);
+          videoCheckInterval = null;
+          const prevContainer = currentContainer;
+          cleanup();
+          setTimeout(() => onVideoFound(actualVideo, prevContainer), 100);
+        }
+      }, 1000);
     }
   }
 
   function cleanup() {
+    // waitForTracksOrTextTracks() resource temizliği (orphan observer/interval önleme)
+    cleanupWaitTrack();
+    // findVideo() observer/interval temizliği
+    if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
+    if (findVideoInterval) { clearInterval(findVideoInterval); findVideoInterval = null; }
+    // Sayfa değişiklik timeout temizliği
+    clearTimeout(pageChangeTimeout);
+    pageChangeTimeout = null;
+    // Mux Player video element swap kontrolü
+    if (videoCheckInterval) { clearInterval(videoCheckInterval); videoCheckInterval = null; }
     // Aktif çeviri port'unu kapat
     if (activeTranslationPort) {
       activeTranslationPort.disconnect();
       activeTranslationPort = null;
+    }
+    // Video değişiklik observer'ını temizle (SPA navigasyonda yetim kalmasını önler)
+    if (videoObserver) {
+      videoObserver.disconnect();
+      videoObserver = null;
     }
     if (currentVideo) {
       enableNativeTextTracks(currentVideo);

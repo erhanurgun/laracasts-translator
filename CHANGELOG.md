@@ -3,6 +3,14 @@
 Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını takip eder ve
 proje [Semantic Versioning](https://semver.org/lang/tr/) kullanır.
 
+## [0.2.1] - 2026-02-21
+
+### Düzeltilen
+
+- SPA navigasyon algılama: pushState/replaceState intercept yerine MutationObserver kullanıldı
+- Chrome Extension isolated world nedeniyle pushState override'ının Inertia.js navigasyonlarında çalışmama sorunu giderildi
+- Sidebar'dan ders değiştirildiğinde çevirinin yeniden başlamaması sorunu düzeltildi
+
 ## [0.2.0] - 2026-02-20
 
 ### Eklenen
@@ -56,5 +64,6 @@ proje [Semantic Versioning](https://semver.org/lang/tr/) kullanır.
 - Katkıda bulunma rehberi (CONTRIBUTING.md)
 - GitHub issue ve PR şablonları
 
+[0.2.1]: https://github.com/erhanurgun/laracasts-translator/releases/tag/v0.2.1
 [0.2.0]: https://github.com/erhanurgun/laracasts-translator/releases/tag/v0.2.0
 [0.1.0]: https://github.com/erhanurgun/laracasts-translator/releases/tag/v0.1.0
