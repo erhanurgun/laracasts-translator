@@ -31,6 +31,20 @@
     return LCT_Logs ? LCT_Logs.sanitizeUrl(url) : String(url || '').substring(0, 140);
   }
 
+  // Interface segregation: renderer sadece 7 görsel alana ihtiyaç duyar.
+  function toRendererStyle(s) {
+    if (!s) return null;
+    return {
+      fontSize: s.fontSize,
+      originalColor: s.originalColor,
+      translationColor: s.translationColor,
+      bgOpacity: s.bgOpacity,
+      showOriginal: s.showOriginal,
+      showTranslation: s.showTranslation,
+      blurOriginal: s.blurOriginal
+    };
+  }
+
   let currentVideo = null;
   let currentContainer = null; // Mux Player gibi shadow DOM durumlarında overlay container
   let currentCues = [];       // [{startTime, endTime, text, translation}]
@@ -800,12 +814,11 @@
 
   function startSync() {
     if (!currentVideo) return;
-
-    // Duplicate listener kontrolü
-    if (syncListenerAttached) return;
-    syncListenerAttached = true;
-
+    // Defensive: eski listener'ı kaldır (memory leak koruması).
+    // SPA navigasyonda currentVideo referansı değişse bile handler temiz kalır.
+    currentVideo.removeEventListener('timeupdate', onTimeUpdate);
     currentVideo.addEventListener('timeupdate', onTimeUpdate);
+    syncListenerAttached = true;
   }
 
   function onTimeUpdate() {
@@ -859,7 +872,7 @@
 
   function ensureRenderer() {
     if (renderer) renderer.destroy();
-    renderer = createSubtitleRenderer(currentVideo, settings, currentContainer);
+    renderer = createSubtitleRenderer(currentVideo, toRendererStyle(settings), currentContainer);
   }
 
   function showMessage(msg) {
@@ -1039,9 +1052,9 @@
         return;
       }
 
-      // Stil güncelle
+      // Stil güncelle (minimal DTO ile)
       if (renderer) {
-        renderer.updateStyle(settings);
+        renderer.updateStyle(toRendererStyle(settings));
       }
 
       // API key eklendiyse ve çeviri beklemedeyse → çeviriyi tetikle
