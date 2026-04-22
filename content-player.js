@@ -13,6 +13,38 @@
   if (window.__lctVideoLoaded) return;
   window.__lctVideoLoaded = true;
 
+  // --- Lib modülleri (manifest content_scripts.js sırasıyla yüklenir) ---
+  const LCT_C = self.LCTConstants || {};
+  const LCT_Fingerprint = self.LCTFingerprint || null;
+  const LCT_CacheKeys = self.LCTCacheKeys || null;
+  const LCT_Guard = self.LCTOriginGuard || null;
+  const LCT_Logs = self.LCTLogSanitizer || null;
+  const LCT_Splitter = self.LCTCueSplitter || null;
+  const LCT_SentenceSplitter = self.LCTSentenceSplitter || null;
+  const LCT_CueSearch = self.LCTCueSearch || null;
+  const LCT_NativeHandler = self.LCTNativeTrackHandler || null;
+  const LCT_Orchestrator = self.LCTTranslationOrchestrator || null;
+  const LCT_DeepQuery = self.LCTDeepQuery || null;
+  const LCT_TranscriptReader = self.LCTTranscriptReader || null;
+
+  function sanitizeUrlForLog(url) {
+    return LCT_Logs ? LCT_Logs.sanitizeUrl(url) : String(url || '').substring(0, 140);
+  }
+
+  // Interface segregation: renderer sadece 7 görsel alana ihtiyaç duyar.
+  function toRendererStyle(s) {
+    if (!s) return null;
+    return {
+      fontSize: s.fontSize,
+      originalColor: s.originalColor,
+      translationColor: s.translationColor,
+      bgOpacity: s.bgOpacity,
+      showOriginal: s.showOriginal,
+      showTranslation: s.showTranslation,
+      blurOriginal: s.blurOriginal
+    };
+  }
+
   let currentVideo = null;
   let currentContainer = null; // Mux Player gibi shadow DOM durumlarında overlay container
   let currentCues = [];       // [{startTime, endTime, text, translation}]
@@ -37,21 +69,25 @@
   let lastVttUrl = null;
   let parsedOriginalCues = [];
   let translationState = 'idle'; // idle | pending_key | translating | done | error
-  let statusMessage = null;      // Aktif durum mesajı (ilerleme, tamamlandı, hata)
-  let activeTranslationPort = null;
-  let translationEpoch = 0;
-  let translationRetryCount = 0;
-  const MAX_TRANSLATION_RETRIES = 2;
+  let statusMessage = null;
   let translationProgress = { current: 0, total: 0 };
+  // Orchestrator içinde port + epoch + retry + isStale yönetilir
+  let orchestrator = null;
 
-  // Cache fingerprint hesaplama (background.js ile aynı algoritma, değişirse her ikisi güncellenmeli)
+  // Cache fingerprint (lib/fingerprint.js delegate)
   function createFingerprint(cues) {
+    if (LCT_Fingerprint) return LCT_Fingerprint.create(cues);
     const allText = cues.map(c => c.text).join('|');
     let hash = 0;
     for (let i = 0; i < allText.length; i++) {
       hash = ((hash << 5) - hash + allText.charCodeAt(i)) | 0;
     }
     return `v2:${cues.length}:${hash}`;
+  }
+
+  function buildCacheKey(videoId) {
+    if (LCT_CacheKeys) return LCT_CacheKeys.translation(videoId);
+    return `translation_${videoId}_tr`;
   }
 
   // --- Başlat ---
@@ -143,29 +179,9 @@
     return null;
   }
 
-  /**
-   * İç içe shadow DOM'larda element arar (BFS, maks 5 seviye).
-   * Mux Player gibi çok katmanlı web component'ler için gerekli.
-   */
-  function deepQuerySelector(host, selector, maxDepth = 5) {
-    const roots = [];
-    if (host.shadowRoot) roots.push(host.shadowRoot);
-
-    for (let depth = 0; depth < maxDepth && roots.length > 0; depth++) {
-      const nextRoots = [];
-      for (const root of roots) {
-        const found = root.querySelector(selector);
-        if (found) return found;
-
-        for (const el of root.querySelectorAll('*')) {
-          if (el.shadowRoot) nextRoots.push(el.shadowRoot);
-        }
-      }
-      roots.length = 0;
-      roots.push(...nextRoots);
-    }
-
-    return null;
+  // Shadow DOM BFS delegate (lib/deep-query-selector.js)
+  function deepQuerySelector(host, selector, maxDepth) {
+    return LCT_DeepQuery ? LCT_DeepQuery.find(host, selector, maxDepth) : null;
   }
 
   function findVideo() {
@@ -263,31 +279,17 @@
     watchVideoChanges(video);
   }
 
-  let nativeTrackHandlers = null;
+  let nativeTrackHandle = null;
   let ccHideStyle = null;
 
   function disableNativeTextTracks(video) {
-    function disableAll() {
-      for (let i = 0; i < video.textTracks.length; i++) {
-        if (video.textTracks[i].mode !== 'disabled') {
-          video.textTracks[i].mode = 'disabled';
-        }
-      }
-    }
-
-    disableAll();
-    video.textTracks.addEventListener('addtrack', disableAll);
-    video.textTracks.addEventListener('change', disableAll);
-
-    nativeTrackHandlers = { target: video.textTracks, handler: disableAll };
+    nativeTrackHandle = LCT_NativeHandler ? LCT_NativeHandler.disable(video) : null;
   }
 
   function enableNativeTextTracks(video) {
-    if (nativeTrackHandlers) {
-      nativeTrackHandlers.target.removeEventListener('addtrack', nativeTrackHandlers.handler);
-      nativeTrackHandlers.target.removeEventListener('change', nativeTrackHandlers.handler);
-      nativeTrackHandlers = null;
-    }
+    if (LCT_NativeHandler) LCT_NativeHandler.restore(nativeTrackHandle);
+    nativeTrackHandle = null;
+    // Laracasts'te video kendi CC'sini tekrar gösterebilsin diye mode'u showing'e çevir
     if (video) {
       for (let i = 0; i < video.textTracks.length; i++) {
         video.textTracks[i].mode = 'showing';
@@ -423,8 +425,8 @@
   }
 
   /**
-   * Inertia data-page prop'larından transcriptSegments verisini çıkarır.
-   * Laracasts, Mux geçişiyle transcript'leri sayfaya JSON olarak gömüyor.
+   * Inertia data-page prop'larından transcriptSegments'i çıkarır.
+   * Parse + stale-check işi lib/transcript-reader.js'e delege edildi.
    */
   async function findTranscriptSegments() {
     if (!window.location.hostname.includes('laracasts.com')) return null;
@@ -432,174 +434,46 @@
       const pageEl = document.querySelector('[data-page]');
       if (!pageEl) return null;
       const dataPage = pageEl.getAttribute('data-page');
-      if (!dataPage) return null;
-      let pageData = JSON.parse(dataPage);
+      if (!dataPage || !LCT_TranscriptReader) return null;
 
-      // Stale data-page kontrolü: Inertia url alanı vs mevcut URL
-      if (pageData.url && pageData.url !== location.pathname) {
+      let parsed = LCT_TranscriptReader.parseDataPage(dataPage, location.pathname);
+
+      // Stale ise taze çek
+      if (parsed.stale) {
         console.log('LCT: data-page stale, sayfa verisi yeniden çekiliyor');
-        pageData = await fetchFreshPageData();
-        if (!pageData) return null;
+        const fresh = await fetchFreshPageData();
+        if (!fresh) return null;
+        parsed = LCT_TranscriptReader.parseDataPage(JSON.stringify(fresh));
       }
 
-      // transcriptSegments doğrudan props içinde veya iç içe olabilir
-      const segments = findDeep(pageData.props, 'transcriptSegments');
-      if (!Array.isArray(segments) || segments.length === 0) return null;
-      console.log('LCT DEBUG: İlk segment örneği:', JSON.stringify(segments[0]));
-      console.log(`LCT: Inertia transcriptSegments'den ${segments.length} segment bulundu`);
-      const mapped = segments.map((seg, i) => ({
-        id: String(seg.id || i + 1),
-        startTime: seg.startTime,
-        endTime: seg.endTime,
-        text: seg.text.replace(/<[^>]*>/g, '')
-      }));
+      if (!parsed.segments) return null;
+
+      console.log(`LCT: Inertia transcriptSegments'den ${parsed.segments.length} segment bulundu`);
+      const mapped = LCT_TranscriptReader.mapSegments(parsed.segments);
       const sentenceCues = mapped.flatMap(seg => splitSegmentToSentences(seg));
       const cues = sentenceCues.flatMap(c => splitLongCue(c));
       console.log(`LCT: Cümle bazlı parçalama sonrası ${cues.length} cue oluştu`);
       return cues;
     } catch (e) {
-      console.warn('LCT: transcriptSegments parse hatası:', e);
+      console.warn('LCT: transcriptSegments parse hatası:', e && e.message);
       return null;
     }
   }
 
-  /**
-   * Paragraf bazlı segment'i cümle sınırlarından böler.
-   * Her cümleye karakter oranına göre zaman aralığı dağıtır.
-   * Zamanlama bilgisi yoksa veya tek cümle ise segment'i olduğu gibi döndürür.
-   */
+  // Sentence splitter delegate (lib/sentence-splitter.js)
   function splitSegmentToSentences(segment) {
-    const { startTime, endTime, text, id } = segment;
-
-    // Zamanlama yoksa veya geçersizse bölme
-    if (typeof startTime !== 'number' || typeof endTime !== 'number') {
-      return [segment];
-    }
-
-    // Cümle sınırlarından böl: noktalama + boşluk + büyük harf
-    const sentences = text.split(/(?<=[.!?])\s+(?=[A-Z])/).filter(s => s.trim().length > 0);
-
-    // Tek cümle veya bölünemedi ise olduğu gibi döndür
-    if (sentences.length <= 1) {
-      return [segment];
-    }
-
-    // Kısa parçaları (< 10 karakter) bir öncekiyle birleştir
-    const merged = [sentences[0]];
-    for (let i = 1; i < sentences.length; i++) {
-      if (sentences[i].length < 10) {
-        merged[merged.length - 1] += ' ' + sentences[i];
-      } else {
-        merged.push(sentences[i]);
-      }
-    }
-
-    // Birleştirme sonrası tek cümle kaldıysa
-    if (merged.length <= 1) {
-      return [segment];
-    }
-
-    // Toplam karakter sayısı üzerinden zaman dağıtımı
-    const totalChars = merged.reduce((sum, s) => sum + s.length, 0);
-    const duration = endTime - startTime;
-    let currentStart = startTime;
-
-    return merged.map((sentence, i) => {
-      const ratio = sentence.length / totalChars;
-      const sentenceDuration = duration * ratio;
-      const sentenceStart = currentStart;
-      const sentenceEnd = (i === merged.length - 1) ? endTime : currentStart + sentenceDuration;
-      currentStart = sentenceEnd;
-
-      return {
-        id: `${id}_${i + 1}`,
-        startTime: Math.round(sentenceStart * 1000) / 1000,
-        endTime: Math.round(sentenceEnd * 1000) / 1000,
-        text: sentence.trim()
-      };
-    });
+    return LCT_SentenceSplitter ? LCT_SentenceSplitter.split(segment) : [segment];
   }
 
-  /**
-   * 70+ karakter uzunluğundaki cue'ları doğal kırılma noktalarından böler.
-   * Virgül veya bağlaçtan (and, or, but, so, that, which vb.) ortaya en yakın
-   * noktada ikiye böler. Kırılma noktası yoksa en yakın boşluktan böler.
-   * Recursive: parçalar hâlâ uzunsa tekrar böler.
-   * Zaman dağılımı karakter oranıyla yapılır.
-   */
-  function splitLongCue(cue, maxLen = 70) {
-    if (cue.text.length <= maxLen) return [cue];
-
-    const text = cue.text;
-    const mid = Math.floor(text.length / 2);
-
-    // Kırılma noktası bul: virgül veya bağlaç (ortaya en yakın)
-    const breakPattern = /,\s|\s(?:and|or|but|so|that|which|where|when|because|if|while|after|before|since)\s/gi;
-    let bestPos = -1;
-    let bestDist = Infinity;
-    let match;
-
-    while ((match = breakPattern.exec(text)) !== null) {
-      const pos = match.index + match[0].indexOf(' ');
-      const dist = Math.abs(pos - mid);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestPos = pos;
-      }
-    }
-
-    // Kırılma noktası yoksa en yakın boşluktan böl
-    if (bestPos === -1) {
-      for (let offset = 0; offset < mid; offset++) {
-        if (text[mid + offset] === ' ') { bestPos = mid + offset; break; }
-        if (text[mid - offset] === ' ') { bestPos = mid - offset; break; }
-      }
-    }
-
-    // Hiç boşluk yoksa (çok nadir) olduğu gibi döndür
-    if (bestPos <= 0 || bestPos >= text.length - 1) return [cue];
-
-    const part1Text = text.slice(0, bestPos).trim();
-    const part2Text = text.slice(bestPos).trim();
-
-    if (!part1Text || !part2Text) return [cue];
-
-    // Zaman dağılımı karakter oranıyla
-    const totalChars = part1Text.length + part2Text.length;
-    const duration = cue.endTime - cue.startTime;
-    const splitTime = cue.startTime + duration * (part1Text.length / totalChars);
-
-    const part1 = {
-      id: cue.id + '_a',
-      startTime: Math.round(cue.startTime * 1000) / 1000,
-      endTime: Math.round(splitTime * 1000) / 1000,
-      text: part1Text
-    };
-    const part2 = {
-      id: cue.id + '_b',
-      startTime: Math.round(splitTime * 1000) / 1000,
-      endTime: Math.round(cue.endTime * 1000) / 1000,
-      text: part2Text
-    };
-
-    // Recursive: parçalar hâlâ uzunsa tekrar böl
-    return [...splitLongCue(part1, maxLen), ...splitLongCue(part2, maxLen)];
+  // Cue splitter delegate (lib/cue-splitter.js)
+  function splitLongCue(cue, maxLen) {
+    if (LCT_Splitter) return LCT_Splitter.split(cue, maxLen);
+    return [cue];
   }
 
-  /**
-   * Obje ağacında bir anahtarı özyinelemeli arar.
-   * Inertia prop yapısı farklı derinliklerde olabilir (props.lesson.transcriptSegments vb.)
-   */
+  // findDeep delegate (lib/transcript-reader.js) — sadece backward-compat
   function findDeep(obj, key) {
-    if (!obj || typeof obj !== 'object') return null;
-    if (obj[key]) return obj[key];
-    for (const v of Object.values(obj)) {
-      if (v && typeof v === 'object') {
-        const found = findDeep(v, key);
-        if (found) return found;
-      }
-    }
-    return null;
+    return LCT_TranscriptReader ? LCT_TranscriptReader.findDeep(obj, key) : null;
   }
 
   /**
@@ -690,7 +564,7 @@
    */
   async function processCues(cues) {
     console.log(`LCT: ${cues.length} cue doğrudan işleniyor (TextTrack API)`);
-    translationEpoch++;
+    if (orchestrator) orchestrator.cancel();
 
     try {
       if (cues.length === 0) {
@@ -732,8 +606,8 @@
   }
 
   async function processVTT(vttUrl) {
-    console.log('LCT: VTT URL:', vttUrl);
-    translationEpoch++;
+    console.log(`LCT: VTT URL: ${sanitizeUrlForLog(vttUrl)}`);
+    if (orchestrator) orchestrator.cancel();
 
     try {
       // VTT içeriğini al
@@ -789,7 +663,7 @@
     if (parsedOriginalCues.length === 0) return;
 
     const videoId = extractVideoId();
-    const cacheKey = `translation_${videoId}_tr`;
+    const cacheKey = buildCacheKey(videoId);
 
     try {
       const result = await chrome.storage.local.get(cacheKey);
@@ -801,7 +675,6 @@
           console.log('LCT: Cache hit: çeviriler önbellekten yükleniyor');
           currentCues = cached.cues;
           translationState = 'done';
-          translationRetryCount = 0;
           showMessage('Önbellekten yüklendi');
           setTimeout(() => { if (translationState === 'done') showMessage(''); }, 2000);
           return;
@@ -817,54 +690,42 @@
 
   function triggerTranslation() {
     if (parsedOriginalCues.length === 0) return;
-
-    // Önceki çeviriyi iptal et
-    if (activeTranslationPort) {
-      try { activeTranslationPort.disconnect(); } catch (_) {}
-      activeTranslationPort = null;
+    if (!LCT_Orchestrator) {
+      console.error('LCT: TranslationOrchestrator yüklenemedi');
+      translationState = 'error';
+      showMessage('Çeviri modülü yüklenemedi');
+      return;
     }
 
     translationState = 'translating';
     showMessage('Çeviriliyor...');
 
-    const epoch = translationEpoch;
     const videoId = extractVideoId();
-    const port = chrome.runtime.connect({ name: 'translate' });
-    activeTranslationPort = port;
 
-    port.onMessage.addListener((msg) => {
-      // Stale çeviri kontrolü - epoch değiştiyse sonucu at
-      if (epoch !== translationEpoch) return;
-
-      if (msg.type === 'PROGRESS') {
+    orchestrator = LCT_Orchestrator.create({
+      maxRetries: 2,
+      onProgress: (msg) => {
         translationProgress = { current: msg.current, total: msg.total };
         if (msg.cached) {
           showMessage('Önbellekten yükleniyor...');
         } else if (!hasPartialTranslation()) {
-          // İlk batch henüz gelmedi → statusMessage ile ilerleme göster
           showMessage(`Çevriliyor... (${msg.current}/${msg.total})`);
         }
-        // İlk batch geldiyse → statusMessage set etme, onTimeUpdate halleder
-      } else if (msg.type === 'BATCH_RESULT') {
-        // Progresif batch: çevirileri anında uygula
-        const { startIndex, cues: batchCues } = msg;
+      },
+      onBatchResult: ({ startIndex, cues: batchCues }) => {
         for (let i = 0; i < batchCues.length; i++) {
           if (currentCues[startIndex + i]) {
             currentCues[startIndex + i].translation = batchCues[i].translation;
           }
         }
         console.log(`LCT: Batch ${Math.floor(startIndex / 50) + 1} uygulandı (index ${startIndex}-${startIndex + batchCues.length - 1})`);
-        // İlk batch geldi → normal render moduna geç
         statusMessage = null;
-      } else if (msg.type === 'COMPLETE') {
-        currentCues = msg.cues;
+      },
+      onComplete: (finalCues) => {
+        currentCues = finalCues;
         translationState = 'done';
-        translationRetryCount = 0; // Başarılı: retry sayacını sıfırla
-        activeTranslationPort = null;
-        try { port.disconnect(); } catch (_) {}
         console.log('LCT: Çeviri tamamlandı');
 
-        // Ekranda aktif cue varsa → anında TR çevirisini göster
         const time = currentVideo?.currentTime || 0;
         const activeCue = findActiveCue(time);
         if (activeCue) {
@@ -875,10 +736,7 @@
           );
         } else {
           showMessage('Çeviri tamamlandı!');
-
-          // Video oynatılıyorsa: 5sn sonra temizle
-          // Video durmuşsa: play/seeked event'ine kadar bekle
-          if (currentVideo.paused) {
+          if (currentVideo && currentVideo.paused) {
             const clearOnResume = () => {
               setTimeout(() => { if (translationState === 'done') showMessage(''); }, 3000);
               currentVideo.removeEventListener('playing', clearOnResume);
@@ -890,35 +748,23 @@
             setTimeout(() => { if (translationState === 'done') showMessage(''); }, 5000);
           }
         }
-      } else if (msg.type === 'ERROR') {
-        console.warn('LCT: Çeviri hatası:', msg.error);
+      },
+      onError: (errMsg) => {
+        console.warn('LCT: Çeviri hatası:', errMsg);
         translationState = 'error';
-        activeTranslationPort = null;
-        showMessage(msg.error);
-        try { port.disconnect(); } catch (_) {}
+        showMessage(errMsg);
+      },
+      onRetry: ({ retryCount, maxRetries }) => {
+        console.warn(`LCT: Bağlantı koptu, yeniden deneniyor (${retryCount}/${maxRetries})`);
+        showMessage(`Bağlantı koptu, yeniden deneniyor (${retryCount}/${maxRetries})...`);
+      },
+      onAbandon: () => {
+        translationState = 'error';
+        showMessage('Bağlantı koptu (yeniden denemeler tükendi)');
       }
     });
 
-    port.onDisconnect.addListener(() => {
-      // Port beklenmedik şekilde kapandıysa ve hâlâ translating durumdaysa
-      if (translationState === 'translating' && epoch === translationEpoch) {
-        activeTranslationPort = null;
-
-        if (translationRetryCount < MAX_TRANSLATION_RETRIES) {
-          translationRetryCount++;
-          console.warn(`LCT: Bağlantı koptu, yeniden deneniyor (${translationRetryCount}/${MAX_TRANSLATION_RETRIES})`);
-          showMessage(`Bağlantı koptu, yeniden deneniyor (${translationRetryCount}/${MAX_TRANSLATION_RETRIES})...`);
-          setTimeout(() => {
-            if (epoch === translationEpoch) triggerTranslation();
-          }, 2000);
-        } else {
-          translationState = 'error';
-          showMessage('Bağlantı koptu (yeniden denemeler tükendi)');
-        }
-      }
-    });
-
-    port.postMessage({ type: 'TRANSLATE_CUES', cues: parsedOriginalCues, videoId });
+    orchestrator.start(parsedOriginalCues, videoId);
   }
 
   async function fetchVTT(url) {
@@ -968,12 +814,11 @@
 
   function startSync() {
     if (!currentVideo) return;
-
-    // Duplicate listener kontrolü
-    if (syncListenerAttached) return;
-    syncListenerAttached = true;
-
+    // Defensive: eski listener'ı kaldır (memory leak koruması).
+    // SPA navigasyonda currentVideo referansı değişse bile handler temiz kalır.
+    currentVideo.removeEventListener('timeupdate', onTimeUpdate);
     currentVideo.addEventListener('timeupdate', onTimeUpdate);
+    syncListenerAttached = true;
   }
 
   function onTimeUpdate() {
@@ -1019,38 +864,15 @@
     return currentCues.some(c => c.translation !== '');
   }
 
-  /**
-   * Binary search ile aktif cue bulma
-   * Kesin zaman eşleşmesi - tolerans yok
-   */
   function findActiveCue(time) {
-    const cues = currentCues;
-    if (!cues || cues.length === 0) return null;
-
-    let low = 0;
-    let high = cues.length - 1;
-
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      const cue = cues[mid];
-
-      if (time < cue.startTime) {
-        high = mid - 1;
-      } else if (time > cue.endTime) {
-        low = mid + 1;
-      } else {
-        return cue;
-      }
-    }
-
-    return null;
+    return LCT_CueSearch ? LCT_CueSearch.findActive(currentCues, time) : null;
   }
 
   // --- Renderer ---
 
   function ensureRenderer() {
     if (renderer) renderer.destroy();
-    renderer = createSubtitleRenderer(currentVideo, settings, currentContainer);
+    renderer = createSubtitleRenderer(currentVideo, toRendererStyle(settings), currentContainer);
   }
 
   function showMessage(msg) {
@@ -1122,10 +944,10 @@
     pageChangeTimeout = null;
     // Mux Player video element swap kontrolü
     if (videoCheckInterval) { clearInterval(videoCheckInterval); videoCheckInterval = null; }
-    // Aktif çeviri port'unu kapat
-    if (activeTranslationPort) {
-      activeTranslationPort.disconnect();
-      activeTranslationPort = null;
+    // Aktif çeviri oturumunu iptal et
+    if (orchestrator) {
+      orchestrator.cancel();
+      orchestrator = null;
     }
     // Video değişiklik observer'ını temizle (SPA navigasyonda yetim kalmasını önler)
     if (videoObserver) {
@@ -1148,7 +970,6 @@
     currentCues = [];
     parsedOriginalCues = [];
     translationState = 'idle';
-    translationRetryCount = 0;
     translationProgress = { current: 0, total: 0 };
     lastVttUrl = null;
   }
@@ -1163,7 +984,7 @@
 
     // Fallback: doğrudan storage'dan oku
     try {
-      const syncDefaults = {
+      const syncDefaults = LCT_C.DEFAULT_SETTINGS || {
         enabled: true,
         showOriginal: true,
         showTranslation: true,
@@ -1174,8 +995,8 @@
         blurOriginal: false
       };
       const syncSettings = await chrome.storage.sync.get(syncDefaults);
-      const { _lct_apiKey } = await chrome.storage.local.get({ _lct_apiKey: '' });
-      syncSettings.hasApiKey = !!_lct_apiKey;
+      const localKeys = await chrome.storage.local.get(['_lct_apiKey_enc', '_lct_apiKey']);
+      syncSettings.hasApiKey = !!(localKeys._lct_apiKey_enc || localKeys._lct_apiKey);
       return syncSettings;
     } catch (e) {
       // Storage'a da erişilemezse hard-coded defaults
@@ -1196,13 +1017,16 @@
   function listenForMessages() {
     // Birincil yöntem: chrome.storage.onChanged - iframe'lerde de çalışır
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'sync' || (area === 'local' && changes._lct_apiKey)) {
+      if (area === 'sync' || (area === 'local' && (changes._lct_apiKey || changes._lct_apiKey_enc))) {
         onSettingsChanged();
       }
     });
 
     // Yedek: runtime mesajları (top frame için)
-    chrome.runtime.onMessage.addListener((message) => {
+    chrome.runtime.onMessage.addListener((message, sender) => {
+      if (LCT_Guard && sender && !LCT_Guard.isValidRuntimeSender(sender)) {
+        return;
+      }
       if (message.type === 'SETTINGS_CHANGED') {
         onSettingsChanged();
       }
@@ -1228,9 +1052,9 @@
         return;
       }
 
-      // Stil güncelle
+      // Stil güncelle (minimal DTO ile)
       if (renderer) {
-        renderer.updateStyle(settings);
+        renderer.updateStyle(toRendererStyle(settings));
       }
 
       // API key eklendiyse ve çeviri beklemedeyse → çeviriyi tetikle
