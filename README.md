@@ -155,18 +155,36 @@ Popup menüsünden aşağıdaki ayarlar değiştirilebilir:
 
 ```
 laracasts-translator/
-├── manifest.json            # Chrome Extension manifest (V3)
-├── background.js            # Service Worker - çeviri motoru, OpenAI API, cache
-├── content-player.js         # Video algılama, VTT çekme, altyazı senkronizasyonu
-├── content-laracasts.js     # Laracasts sayfası - durum göstergesi, SPA takibi
-├── popup.html / js / css    # Popup ayarlar arayüzü
-├── lib/
-│   ├── storage.js           # Chrome Storage API soyutlaması
-│   ├── vtt-parser.js        # WebVTT parser
-│   └── subtitle-renderer.js # Çift altyazı overlay factory
+├── manifest.json                      # Chrome Extension manifest (V3)
+├── background.js                      # Service Worker - çeviri motoru, OpenAI API, cache orkestrasyonu
+├── content-player.js                  # Video algılama, VTT çekme, altyazı senkronizasyonu
+├── content-laracasts.js               # Laracasts sayfası - durum göstergesi, SPA takibi
+├── popup.html / js / css              # Popup ayarlar arayüzü
+├── lib/                               # İzole edilmiş sorumluluk modülleri (SRP)
+│   ├── constants.js                   # Tüm modüllerin okuduğu tek kaynak sabitler
+│   ├── cache-keys.js                  # Çeviri cache anahtar şeması (translation_<videoId>_tr)
+│   ├── fingerprint.js                 # VTT içeriğinden cache doğrulama fingerprint'i
+│   ├── crypto-vault.js                # AES-GCM ile API key şifreleme kasası
+│   ├── origin-guard.js                # postMessage + chrome.runtime origin doğrulama
+│   ├── log-sanitizer.js               # Log mesajlarındaki PII maskeleme
+│   ├── prompt-sanitizer.js            # OpenAI prompt injection savunması
+│   ├── storage.js                     # Popup tarafı Chrome Storage wrapper
+│   ├── settings-bg.js                 # Service worker tarafı Settings + API key yönetimi
+│   ├── translation-cache-bg.js        # Service worker tarafı çeviri cache (LRU evict)
+│   ├── vtt-parser.js                  # WebVTT parser → {id, startTime, endTime, text}
+│   ├── cue-splitter.js                # Uzun cue'ları doğal break noktalarından bölen splitter
+│   ├── sentence-splitter.js           # Inertia paragraf cue'larını cümle sınırlarından böler
+│   ├── batch-builder.js               # Cue dizisini 50'lik batch'lere sıralama koruyarak böler
+│   ├── cue-search.js                  # Binary search ile aktif cue bulma (O(log n))
+│   ├── deep-query-selector.js         # Shadow DOM'da BFS ile element arama (Mux Player)
+│   ├── native-track-handler.js        # Player'ın kendi altyazı track'lerini devre dışı bırakır
+│   ├── transcript-reader.js           # Laracasts Inertia transcriptSegments okuyucu
+│   ├── translation-orchestrator.js    # Port + epoch/stale + retry + callback dispatch
+│   └── subtitle-renderer.js           # Çift altyazı overlay factory
 ├── styles/
-│   └── subtitle-overlay.css # Altyazı stilleri
-└── icons/                   # Eklenti simgeleri (16, 32, 48, 128)
+│   └── subtitle-overlay.css           # Altyazı stilleri
+├── test/                              # Vitest birim testleri (her lib modülü için test dosyası)
+└── icons/                             # Eklenti simgeleri (16, 32, 48, 128)
 ```
 
 ### Çeviri Pipeline'ı
