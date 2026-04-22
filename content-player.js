@@ -19,6 +19,8 @@
   const LCT_CacheKeys = self.LCTCacheKeys || null;
   const LCT_Guard = self.LCTOriginGuard || null;
   const LCT_Logs = self.LCTLogSanitizer || null;
+  const LCT_Splitter = self.LCTCueSplitter || null;
+  const LCT_SentenceSplitter = self.LCTSentenceSplitter || null;
 
   function sanitizeUrlForLog(url) {
     return LCT_Logs ? LCT_Logs.sanitizeUrl(url) : String(url || '').substring(0, 140);
@@ -480,127 +482,15 @@
     }
   }
 
-  /**
-   * Paragraf bazlı segment'i cümle sınırlarından böler.
-   * Her cümleye karakter oranına göre zaman aralığı dağıtır.
-   * Zamanlama bilgisi yoksa veya tek cümle ise segment'i olduğu gibi döndürür.
-   */
+  // Sentence splitter delegate (lib/sentence-splitter.js)
   function splitSegmentToSentences(segment) {
-    const { startTime, endTime, text, id } = segment;
-
-    // Zamanlama yoksa veya geçersizse bölme
-    if (typeof startTime !== 'number' || typeof endTime !== 'number') {
-      return [segment];
-    }
-
-    // Cümle sınırlarından böl: noktalama + boşluk + büyük harf
-    const sentences = text.split(/(?<=[.!?])\s+(?=[A-Z])/).filter(s => s.trim().length > 0);
-
-    // Tek cümle veya bölünemedi ise olduğu gibi döndür
-    if (sentences.length <= 1) {
-      return [segment];
-    }
-
-    // Kısa parçaları (< 10 karakter) bir öncekiyle birleştir
-    const merged = [sentences[0]];
-    for (let i = 1; i < sentences.length; i++) {
-      if (sentences[i].length < 10) {
-        merged[merged.length - 1] += ' ' + sentences[i];
-      } else {
-        merged.push(sentences[i]);
-      }
-    }
-
-    // Birleştirme sonrası tek cümle kaldıysa
-    if (merged.length <= 1) {
-      return [segment];
-    }
-
-    // Toplam karakter sayısı üzerinden zaman dağıtımı
-    const totalChars = merged.reduce((sum, s) => sum + s.length, 0);
-    const duration = endTime - startTime;
-    let currentStart = startTime;
-
-    return merged.map((sentence, i) => {
-      const ratio = sentence.length / totalChars;
-      const sentenceDuration = duration * ratio;
-      const sentenceStart = currentStart;
-      const sentenceEnd = (i === merged.length - 1) ? endTime : currentStart + sentenceDuration;
-      currentStart = sentenceEnd;
-
-      return {
-        id: `${id}_${i + 1}`,
-        startTime: Math.round(sentenceStart * 1000) / 1000,
-        endTime: Math.round(sentenceEnd * 1000) / 1000,
-        text: sentence.trim()
-      };
-    });
+    return LCT_SentenceSplitter ? LCT_SentenceSplitter.split(segment) : [segment];
   }
 
-  /**
-   * 70+ karakter uzunluğundaki cue'ları doğal kırılma noktalarından böler.
-   * Virgül veya bağlaçtan (and, or, but, so, that, which vb.) ortaya en yakın
-   * noktada ikiye böler. Kırılma noktası yoksa en yakın boşluktan böler.
-   * Recursive: parçalar hâlâ uzunsa tekrar böler.
-   * Zaman dağılımı karakter oranıyla yapılır.
-   */
-  function splitLongCue(cue, maxLen = 70) {
-    if (cue.text.length <= maxLen) return [cue];
-
-    const text = cue.text;
-    const mid = Math.floor(text.length / 2);
-
-    // Kırılma noktası bul: virgül veya bağlaç (ortaya en yakın)
-    const breakPattern = /,\s|\s(?:and|or|but|so|that|which|where|when|because|if|while|after|before|since)\s/gi;
-    let bestPos = -1;
-    let bestDist = Infinity;
-    let match;
-
-    while ((match = breakPattern.exec(text)) !== null) {
-      const pos = match.index + match[0].indexOf(' ');
-      const dist = Math.abs(pos - mid);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestPos = pos;
-      }
-    }
-
-    // Kırılma noktası yoksa en yakın boşluktan böl
-    if (bestPos === -1) {
-      for (let offset = 0; offset < mid; offset++) {
-        if (text[mid + offset] === ' ') { bestPos = mid + offset; break; }
-        if (text[mid - offset] === ' ') { bestPos = mid - offset; break; }
-      }
-    }
-
-    // Hiç boşluk yoksa (çok nadir) olduğu gibi döndür
-    if (bestPos <= 0 || bestPos >= text.length - 1) return [cue];
-
-    const part1Text = text.slice(0, bestPos).trim();
-    const part2Text = text.slice(bestPos).trim();
-
-    if (!part1Text || !part2Text) return [cue];
-
-    // Zaman dağılımı karakter oranıyla
-    const totalChars = part1Text.length + part2Text.length;
-    const duration = cue.endTime - cue.startTime;
-    const splitTime = cue.startTime + duration * (part1Text.length / totalChars);
-
-    const part1 = {
-      id: cue.id + '_a',
-      startTime: Math.round(cue.startTime * 1000) / 1000,
-      endTime: Math.round(splitTime * 1000) / 1000,
-      text: part1Text
-    };
-    const part2 = {
-      id: cue.id + '_b',
-      startTime: Math.round(splitTime * 1000) / 1000,
-      endTime: Math.round(cue.endTime * 1000) / 1000,
-      text: part2Text
-    };
-
-    // Recursive: parçalar hâlâ uzunsa tekrar böl
-    return [...splitLongCue(part1, maxLen), ...splitLongCue(part2, maxLen)];
+  // Cue splitter delegate (lib/cue-splitter.js)
+  function splitLongCue(cue, maxLen) {
+    if (LCT_Splitter) return LCT_Splitter.split(cue, maxLen);
+    return [cue];
   }
 
   /**
