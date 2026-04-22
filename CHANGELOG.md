@@ -3,6 +3,12 @@
 Bu dosya [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) formatını takip eder ve
 proje [Semantic Versioning](https://semver.org/lang/tr/) kullanır.
 
+## [Unreleased]
+
+### Güvenlik / İzinler
+
+- `management` permission eklendi: popup toggle kapatıldığında eklenti `chrome.management.setEnabled(id, false)` ile `chrome://extensions` seviyesinde tamamen devre dışı bırakılıyor. Re-enable için kullanıcı `chrome://extensions`'a gider. Storage'a yazma yapılmadığı için re-enable sonrası default `enabled: true` devreye girer.
+
 ## [0.2.1] - 2026-02-21
 
 ### Düzeltilen

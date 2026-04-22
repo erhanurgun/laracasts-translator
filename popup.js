@@ -73,8 +73,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Toggle'lar ve ayar değişiklikleri
-  els.enableToggle.addEventListener('change', () => {
-    Storage.saveSetting('enabled', els.enableToggle.checked);
+  els.enableToggle.addEventListener('change', async () => {
+    // Toggle kapatılırsa: eklentiyi chrome://extensions seviyesinde tamamen
+    // devre dışı bırak. Re-enable için kullanıcı chrome://extensions'a gider.
+    if (!els.enableToggle.checked) {
+      try {
+        // Storage'a yazmıyoruz - böylece re-enable sonrası default 'enabled: true'
+        // devreye girer ve eklenti normal çalışır.
+        await chrome.management.setEnabled(chrome.runtime.id, false);
+        // Bu çağrı başarılıysa popup kapanır, aşağısı çalışmaz.
+      } catch (e) {
+        console.error('Eklenti self-disable başarısız:', e);
+        // Fallback: en azından yumuşak devre dışı (overlay/çeviri durur)
+        await Storage.saveSetting('enabled', false);
+        broadcastSettingsChange();
+      }
+      return;
+    }
+    // Toggle açıksa (popup zaten eklenti aktifken açılır) - ayarı açık işaretle
+    await Storage.saveSetting('enabled', true);
     broadcastSettingsChange();
   });
 
