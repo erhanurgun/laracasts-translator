@@ -44,7 +44,7 @@
   const MAX_TRANSLATION_RETRIES = 2;
   let translationProgress = { current: 0, total: 0 };
 
-  // Cache fingerprint hesaplama (background.js ile aynı algoritma — değişirse her ikisi güncellenmeli)
+  // Cache fingerprint hesaplama (background.js ile aynı algoritma, değişirse her ikisi güncellenmeli)
   function createFingerprint(cues) {
     const allText = cues.map(c => c.text).join('|');
     let hash = 0;
@@ -604,7 +604,7 @@
 
   /**
    * waitForTracksOrTextTracks() tarafından oluşturulan observer/interval/handler'ları temizler.
-   * Module-scope değişkenler sayesinde cleanup()'tan da erişilebilir — orphan resource sızıntısını önler.
+   * Module-scope değişkenler sayesinde cleanup()'tan da erişilebilir; orphan resource sızıntısını önler.
    */
   function cleanupWaitTrack() {
     if (waitTrackObserver) { waitTrackObserver.disconnect(); waitTrackObserver = null; }
@@ -798,7 +798,7 @@
       if (cached && cached.cues && cached.cues.length === parsedOriginalCues.length) {
         const fingerprint = createFingerprint(parsedOriginalCues);
         if (cached.fingerprint === fingerprint) {
-          console.log('LCT: Cache hit — çeviriler önbellekten yükleniyor');
+          console.log('LCT: Cache hit: çeviriler önbellekten yükleniyor');
           currentCues = cached.cues;
           translationState = 'done';
           translationRetryCount = 0;
