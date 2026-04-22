@@ -14,16 +14,18 @@ importScripts(
   'lib/crypto-vault.js',
   'lib/prompt-sanitizer.js',
   'lib/origin-guard.js',
-  'lib/log-sanitizer.js'
+  'lib/log-sanitizer.js',
+  'lib/settings-bg.js',
+  'lib/translation-cache-bg.js'
 );
 
 const C = self.LCTConstants;
 const Fingerprint = self.LCTFingerprint;
-const CacheKeys = self.LCTCacheKeys;
-const Vault = self.LCTCryptoVault;
 const Sanitizer = self.LCTPromptSanitizer;
 const Guard = self.LCTOriginGuard;
 const Logs = self.LCTLogSanitizer;
+const SettingsBg = self.LCTSettingsBg;
+const TranslationCacheBg = self.LCTTranslationCacheBg;
 
 // --- Keep-Alive ---
 
@@ -41,91 +43,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// --- Ayarlar + API key (şifreli + triple migration) ---
-
-const SettingsBg = {
-  async getApiKey() {
-    // 1. Şifreli key
-    const encStored = await chrome.storage.local.get(C.STORAGE_KEY_ENC_API);
-    const enc = encStored[C.STORAGE_KEY_ENC_API];
-    if (typeof enc === 'string' && enc.length > 0) {
-      try {
-        return await Vault.decrypt(enc);
-      } catch (_) {
-        console.warn('LCT-BG: Şifreli API key çözülemedi, legacy kontrol ediliyor');
-      }
-    }
-
-    // 2. Legacy plaintext local (_lct_apiKey): migrate
-    const legacyStored = await chrome.storage.local.get(C.STORAGE_KEY_LEGACY_API);
-    let legacy = legacyStored[C.STORAGE_KEY_LEGACY_API];
-
-    // 3. Pre-v0.2.1 sync storage legacy (apiKey)
-    if (!legacy) {
-      const syncStored = await chrome.storage.sync.get(C.STORAGE_KEY_SYNC_API_LEGACY);
-      if (syncStored[C.STORAGE_KEY_SYNC_API_LEGACY]) {
-        legacy = syncStored[C.STORAGE_KEY_SYNC_API_LEGACY];
-        try {
-          await chrome.storage.sync.remove(C.STORAGE_KEY_SYNC_API_LEGACY);
-        } catch (_) {}
-      }
-    }
-
-    if (typeof legacy === 'string' && legacy.length > 0) {
-      try {
-        const encBlob = await Vault.encrypt(legacy);
-        await chrome.storage.local.set({ [C.STORAGE_KEY_ENC_API]: encBlob });
-        await chrome.storage.local.remove(C.STORAGE_KEY_LEGACY_API);
-        console.log('LCT-BG: Eski plaintext API key şifrelendi');
-      } catch (e) {
-        console.warn('LCT-BG: Migration hatası:', e && e.message);
-      }
-      return legacy;
-    }
-    return '';
-  },
-
-  async getSettings() {
-    const settings = await chrome.storage.sync.get(C.DEFAULT_SETTINGS);
-    settings.apiKey = await this.getApiKey();
-    return settings;
-  }
-};
-
-// --- Çeviri cache ---
-
-const TranslationCacheBg = {
-  async get(videoId) {
-    const key = CacheKeys.translation(videoId);
-    const result = await chrome.storage.local.get(key);
-    return result[key] || null;
-  },
-
-  async set(videoId, cues, fingerprint) {
-    const key = CacheKeys.translation(videoId);
-    const entry = { cues, fingerprint, timestamp: Date.now() };
-    try {
-      await chrome.storage.local.set({ [key]: entry });
-    } catch (e) {
-      if (e && e.message && e.message.includes(C.CACHE_QUOTA_MESSAGE_TOKEN)) {
-        await this._evictOldest();
-        await chrome.storage.local.set({ [key]: entry });
-      }
-    }
-  },
-
-  async _evictOldest() {
-    const all = await chrome.storage.local.get(null);
-    const cacheEntries = Object.entries(all)
-      .filter(([k]) => CacheKeys.isTranslationKey(k))
-      .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
-    const toRemove = cacheEntries.slice(
-      0,
-      Math.max(1, Math.floor(cacheEntries.length * C.CACHE_EVICTION_FRACTION))
-    );
-    await chrome.storage.local.remove(toRemove.map(([k]) => k));
-  }
-};
+// SettingsBg ve TranslationCacheBg artık lib/settings-bg.js + lib/translation-cache-bg.js
 
 // --- OpenAI Çeviri ---
 
