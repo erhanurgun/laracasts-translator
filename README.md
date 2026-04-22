@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Sürüm-0.2.1-blue" alt="Sürüm">
+  <img src="https://img.shields.io/badge/Sürüm-0.4.0-blue" alt="Sürüm">
   <img src="https://img.shields.io/badge/Lisans-MIT-green" alt="Lisans">
   <img src="https://img.shields.io/badge/Chrome-v116%2B-yellow" alt="Chrome">
   <img src="https://img.shields.io/badge/Manifest-v3-orange" alt="Manifest V3">
@@ -52,6 +52,10 @@
   çeviri devam eder
 - **Otomatik yeniden deneme** - Başarısız API çağrıları 3 denemeye kadar tekrarlanır; sayı uyuşmazlığında batch ikiye
   bölünür
+  - **Çeviri bulanıklaştırma** - Language Reactor tarzı blur efekti; çeviriyi görmeden önce tahmin etme imkânı
+  - **API key güvenliği** - AES-GCM şifreleme ile API anahtarı güvenli depolama
+    - **Prompt koruma** - Role-swap ve ChatML enjeksiyon saldırılarına karşı sanitizer
+      - *Toggle devre dışı bırakma** - Kapatma düğmesi eklentiyi chrome://extensions seviyesinde self-disable eder
 
 ## Gereksinimler
 
@@ -82,7 +86,7 @@
 
 ### Yöntem 3: Chrome Web Store
 
-> Chrome Web Store yayını yakında planlanmaktadır...
+> Chrome Web Store'dan indirin: [Laracasts Translator](https://chromewebstore.google.com/detail/laracasts-translator/kacbkmbepbnoigdaingpbooplgclaffn)
 
 ## API Key Kurulumu
 
@@ -129,14 +133,28 @@ Popup menüsünden aşağıdaki ayarlar değiştirilebilir:
 ```
 laracasts-translator/
 ├── manifest.json            # Chrome Extension manifest (V3)
-├── background.js            # Service Worker - çeviri motoru, OpenAI API, cache
-├── content-player.js         # Video algılama, VTT çekme, altyazı senkronizasyonu
+├── background.js            # Service Worker - OpenAI API, ayar ve cache modüllerini yükler
+├── content-player.js         # Mux Player video algılama, altyazı senkronizasyonu
 ├── content-laracasts.js     # Laracasts sayfası - durum göstergesi, SPA takibi
 ├── popup.html / js / css    # Popup ayarlar arayüzü
 ├── lib/
-│   ├── storage.js           # Chrome Storage API soyutlaması
-│   ├── vtt-parser.js        # WebVTT parser
-│   └── subtitle-renderer.js # Çift altyazı overlay factory
+│   ├── constants.js           # Merkezi sabitler (batch boyutu, retry, timeout)
+│   ├── fingerprint.js         # VTT içeriğinden cache key türeten stale-cache detektörü
+│   ├── cache-keys.js          # Video id ve dil bazlı cache key üretici
+│   ├── crypto-vault.js        # AES-GCM ile API key şifreleme
+│   ├── origin-guard.js        # laracasts.com mesaj kaynağı allowlist doğrulaması
+│   ├── log-sanitizer.js       # URL / API key / Bearer token maskeleme
+│   ├── prompt-sanitizer.js    # Role-swap ve ChatML enjeksiyon temizleyici
+│   ├── vtt-parser.js          # WebVTT parser (dual-export)
+│   ├── cue-splitter.js        # Uzun cue'ları doğal break noktasından böler
+│   ├── sentence-splitter.js   # Paragrafları cümle sınırından böler
+│   ├── batch-builder.js       # Sıra koruyan batch üretici
+│   ├── cue-search.js          # Binary search ile cue arama
+│   ├── native-track-handler.js# Native CC disable/restore
+│   ├── translation-orchestrator.js # Port + epoch + retry yöneticisi
+│   ├── deep-query-selector.js # Mux Player shadow DOM BFS tarayıcı
+│   ├── transcript-reader.js   # Inertia transcriptSegments + HTML strip
+│   └── subtitle-renderer.js  # Çift altyazı overlay factory
 ├── styles/
 │   └── subtitle-overlay.css # Altyazı stilleri
 └── icons/                   # Eklenti simgeleri (16, 32, 48, 128)
