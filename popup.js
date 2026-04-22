@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiKeyStatus: document.getElementById('apiKeyStatus'),
     showOriginal: document.getElementById('showOriginal'),
     showTranslation: document.getElementById('showTranslation'),
-    blurTranslation: document.getElementById('blurTranslation'),
+    blurOriginal: document.getElementById('blurOriginal'),
     fontSize: document.getElementById('fontSize'),
     fontSizeValue: document.getElementById('fontSizeValue'),
     originalColor: document.getElementById('originalColor'),
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     els.enableToggle.checked = settings.enabled;
     els.showOriginal.checked = settings.showOriginal;
     els.showTranslation.checked = settings.showTranslation;
-    els.blurTranslation.checked = !!settings.blurTranslation;
+    els.blurOriginal.checked = !!settings.blurOriginal;
     els.fontSize.value = settings.fontSize;
     els.fontSizeValue.textContent = settings.fontSize;
     els.originalColor.value = settings.originalColor;
@@ -107,8 +107,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     broadcastSettingsChange();
   });
 
-  els.blurTranslation.addEventListener('change', () => {
-    Storage.saveSetting('blurTranslation', els.blurTranslation.checked);
+  els.blurOriginal.addEventListener('change', () => {
+    Storage.saveSetting('blurOriginal', els.blurOriginal.checked);
     broadcastSettingsChange();
   });
 

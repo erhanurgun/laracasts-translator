@@ -44,7 +44,7 @@ const StorageBg = {
       originalColor: '#ffffff',
       translationColor: '#ffd700',
       bgOpacity: 0.75,
-      blurTranslation: false
+      blurOriginal: false
     };
     const settings = await chrome.storage.sync.get(syncDefaults);
     // apiKey local'den gelir

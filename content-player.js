@@ -1171,7 +1171,7 @@
         originalColor: '#ffffff',
         translationColor: '#ffd700',
         bgOpacity: 0.75,
-        blurTranslation: false
+        blurOriginal: false
       };
       const syncSettings = await chrome.storage.sync.get(syncDefaults);
       const { _lct_apiKey } = await chrome.storage.local.get({ _lct_apiKey: '' });
@@ -1187,7 +1187,7 @@
         originalColor: '#ffffff',
         translationColor: '#ffd700',
         bgOpacity: 0.75,
-        blurTranslation: false,
+        blurOriginal: false,
         hasApiKey: false
       };
     }

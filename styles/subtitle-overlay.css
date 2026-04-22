@@ -50,17 +50,17 @@
   font-weight: 500;
 }
 
-/* Çeviri bulanıklaştırma (Language Reactor benzeri).
-   Kullanıcı önce orijinal metni anlamaya çalışsın, gerekirse fare ile
-   üzerine gelip çeviriyi netleştirsin. */
-#lct-subtitle-translation.lct-blur {
+/* Orijinal (kaynak dil) bulanıklaştırma - öğrenme modu.
+   Kullanıcı önce kendi anlamaya/tahmin etmeye çalışır; gerekirse fare
+   ile orijinal metnin üzerine gelip netleştirir. Çeviri daima nettir. */
+#lct-subtitle-original.lct-blur {
   filter: blur(0.3em);
   transition: filter 0.18s ease;
   pointer-events: auto;
   cursor: pointer;
 }
 
-#lct-subtitle-translation.lct-blur:hover {
+#lct-subtitle-original.lct-blur:hover {
   filter: blur(0);
 }
 
