@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Sürüm-0.2.1-blue" alt="Sürüm">
+  <img src="https://img.shields.io/badge/Sürüm-0.4.0-blue" alt="Sürüm">
   <img src="https://img.shields.io/badge/Lisans-MIT-green" alt="Lisans">
   <img src="https://img.shields.io/badge/Chrome-v116%2B-yellow" alt="Chrome">
   <img src="https://img.shields.io/badge/Manifest-v3-orange" alt="Manifest V3">
@@ -21,19 +21,39 @@
 
 ## Ekran Görüntüleri
 
-### Çift Altyazı Gösterimi (EN + TR)
+### API Key Uyarısı
 
-![Çift Altyazı Gösterimi (EN + TR)](./screenshots/subtitle-overlay.png)
+API key girilmemişse video üzerinde anlaşılır bir uyarı gösterilir ve kullanıcı popup'a yönlendirilir.
+
+![API Key Uyarısı](./screenshots/api-key-warning.png)
 
 ### Çeviri İlerlemesi
 
+Çeviri başladığı anda altyazı altında batch bazlı ilerleme göstergesi görünür (`Çeviriliyor... (1/4)`).
+
 ![Çeviri İlerlemesi](./screenshots/translation-progress.png)
 
+### Çift Altyazı Gösterimi (EN + TR)
+
+Orijinal (beyaz) ve Türkçe çeviri (altın sarı) aynı anda ekranda gösterilir.
+
+![Çift Altyazı Gösterimi (EN + TR)](./screenshots/subtitle-overlay.png)
+
+### Öğrenme Modu — Orijinali Bulanıklaştır
+
+Orijinal altyazı bulanık gösterilir, fare üzerine gelince netleşir. Türkçe önce anlamak, ardından İngilizce metne bakarak dil pratiği yapmak için idealdir.
+
+![Öğrenme Modu - Orijinali Bulanıklaştır](./screenshots/blur-original.png)
+
 ### Sadece Türkçe Altyazı
+
+Orijinal altyazı tamamen gizlenebilir, yalnızca Türkçe çeviri gösterilir.
 
 ![Sadece Türkçe Altyazı](./screenshots/only-translation.png)
 
 ### Popup Ayarları
+
+API key, altyazı görünümü, renkler, yazı boyutu, öğrenme modu ve önbellek yönetimi tek ekrandan kontrol edilir.
 
 ![Popup Ayarları](./screenshots/popup.png)
 
@@ -41,12 +61,16 @@
 
 - **Gerçek zamanlı çeviri** - Video oynatılırken altyazılar anında Türkçeye çevrilir (çeviri tamamlandıkça)
 - **Çift altyazı gösterimi** - Orijinal (İngilizce) ve çeviri (Türkçe) aynı anda ekranda
+- **Öğrenme modu (bulanıklaştırma)** - Orijinal altyazı bulanık görünür, fare üzerine gelince netleşir; önce anlamaya
+  odaklanıp sonra İngilizce metni kontrol etmeyi kolaylaştırır
 - **Batch çeviri** - Altyazılar 50'lik gruplar halinde verimli şekilde çevrilir
 - **Progressive güncelleme** - Her batch tamamlandığında çeviriler hemen gösterilir, tamamının bitmesi beklenmez
 - **Akıllı önbellek** - Çevrilen altyazılar local storage'da saklanır, aynı video tekrar açıldığında API çağrısı
   yapılmaz
+- **Önbellek yönetimi UI** - Popup'tan önbellekteki video sayısı ve toplam boyut görüntülenir, tek tıklamayla temizlenir
 - **VTT fingerprint doğrulama** - Altyazı içeriği değiştiyse eski önbellek otomatik geçersiz sayılır
 - **LRU kota yönetimi** - Depolama kotası aşıldığında en eski önbellek kayıtları otomatik temizlenir
+- **API key uyarısı** - Key girilmediyse video üzerinde görünür uyarı gösterilir, kullanıcı popup'a yönlendirilir
 - **Özelleştirilebilir görünüm** - Yazı boyutu, renkler ve arka plan opaklığı popup'tan ayarlanabilir
 - **SPA navigasyon takibi** - Laracasts'in tek sayfa uygulama yapısı desteklenir, sayfa yenilemeden video değişimlerinde
   çeviri devam eder
@@ -112,15 +136,18 @@
 
 Popup menüsünden aşağıdaki ayarlar değiştirilebilir:
 
-| Ayar                   | Varsayılan        | Açıklama                              |
-|------------------------|-------------------|---------------------------------------|
-| **Eklenti durumu**     | Açık              | Çeviriyi etkinleştir/devre dışı bırak |
-| **Orijinal altyazı**   | Açık              | İngilizce altyazıyı göster/gizle      |
-| **Çeviri altyazısı**   | Açık              | Türkçe altyazıyı göster/gizle         |
-| **Yazı boyutu**        | 25px              | 18px – 45px arası ayarlanabilir       |
-| **Orijinal renk**      | `#ffffff` (beyaz) | Orijinal altyazı metin rengi          |
-| **Çeviri renk**        | `#ffd700` (altın) | Çeviri altyazı metin rengi            |
-| **Arka plan opaklığı** | %75               | Altyazı arka planının saydamlığı      |
+| Ayar                        | Varsayılan        | Açıklama                                                         |
+|-----------------------------|-------------------|------------------------------------------------------------------|
+| **Eklenti durumu**          | Açık              | Çeviriyi etkinleştir/devre dışı bırak                            |
+| **Orijinal altyazı**        | Açık              | İngilizce altyazıyı göster/gizle                                 |
+| **Çeviri altyazısı**        | Açık              | Türkçe altyazıyı göster/gizle                                    |
+| **Orijinali bulanıklaştır** | Kapalı            | Öğrenme modu: İngilizce metin bulanık, fare üzerine gelince net  |
+| **Yazı boyutu**             | 25px              | 18px – 45px arası ayarlanabilir                                  |
+| **Orijinal renk**           | `#ffffff` (beyaz) | Orijinal altyazı metin rengi                                     |
+| **Çeviri renk**             | `#ffd700` (altın) | Çeviri altyazı metin rengi                                       |
+| **Arka plan opaklığı**      | %75               | Altyazı arka planının saydamlığı                                 |
+| **Varsayılana sıfırla**     | -                 | Tüm görünüm ayarlarını fabrika değerlerine döndürür              |
+| **Önbellek**                | -                 | Önbellekteki video sayısı ve toplam boyut; tek tıkla temizlenir  |
 
 ## Mimari
 
