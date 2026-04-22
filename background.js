@@ -43,7 +43,8 @@ const StorageBg = {
       fontSize: 25,
       originalColor: '#ffffff',
       translationColor: '#ffd700',
-      bgOpacity: 0.75
+      bgOpacity: 0.75,
+      blurTranslation: false
     };
     const settings = await chrome.storage.sync.get(syncDefaults);
     // apiKey local'den gelir
