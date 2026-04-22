@@ -13,6 +13,17 @@
   if (window.__lctVideoLoaded) return;
   window.__lctVideoLoaded = true;
 
+  // --- Lib modülleri (manifest content_scripts.js sırasıyla yüklenir) ---
+  const LCT_C = self.LCTConstants || {};
+  const LCT_Fingerprint = self.LCTFingerprint || null;
+  const LCT_CacheKeys = self.LCTCacheKeys || null;
+  const LCT_Guard = self.LCTOriginGuard || null;
+  const LCT_Logs = self.LCTLogSanitizer || null;
+
+  function sanitizeUrlForLog(url) {
+    return LCT_Logs ? LCT_Logs.sanitizeUrl(url) : String(url || '').substring(0, 140);
+  }
+
   let currentVideo = null;
   let currentContainer = null; // Mux Player gibi shadow DOM durumlarında overlay container
   let currentCues = [];       // [{startTime, endTime, text, translation}]
@@ -44,14 +55,20 @@
   const MAX_TRANSLATION_RETRIES = 2;
   let translationProgress = { current: 0, total: 0 };
 
-  // Cache fingerprint hesaplama (background.js ile aynı algoritma, değişirse her ikisi güncellenmeli)
+  // Cache fingerprint (lib/fingerprint.js delegate)
   function createFingerprint(cues) {
+    if (LCT_Fingerprint) return LCT_Fingerprint.create(cues);
     const allText = cues.map(c => c.text).join('|');
     let hash = 0;
     for (let i = 0; i < allText.length; i++) {
       hash = ((hash << 5) - hash + allText.charCodeAt(i)) | 0;
     }
     return `v2:${cues.length}:${hash}`;
+  }
+
+  function buildCacheKey(videoId) {
+    if (LCT_CacheKeys) return LCT_CacheKeys.translation(videoId);
+    return `translation_${videoId}_tr`;
   }
 
   // --- Başlat ---
@@ -732,7 +749,7 @@
   }
 
   async function processVTT(vttUrl) {
-    console.log('LCT: VTT URL:', vttUrl);
+    console.log(`LCT: VTT URL: ${sanitizeUrlForLog(vttUrl)}`);
     translationEpoch++;
 
     try {
@@ -789,7 +806,7 @@
     if (parsedOriginalCues.length === 0) return;
 
     const videoId = extractVideoId();
-    const cacheKey = `translation_${videoId}_tr`;
+    const cacheKey = buildCacheKey(videoId);
 
     try {
       const result = await chrome.storage.local.get(cacheKey);
@@ -1163,7 +1180,7 @@
 
     // Fallback: doğrudan storage'dan oku
     try {
-      const syncDefaults = {
+      const syncDefaults = LCT_C.DEFAULT_SETTINGS || {
         enabled: true,
         showOriginal: true,
         showTranslation: true,
@@ -1174,8 +1191,8 @@
         blurOriginal: false
       };
       const syncSettings = await chrome.storage.sync.get(syncDefaults);
-      const { _lct_apiKey } = await chrome.storage.local.get({ _lct_apiKey: '' });
-      syncSettings.hasApiKey = !!_lct_apiKey;
+      const localKeys = await chrome.storage.local.get(['_lct_apiKey_enc', '_lct_apiKey']);
+      syncSettings.hasApiKey = !!(localKeys._lct_apiKey_enc || localKeys._lct_apiKey);
       return syncSettings;
     } catch (e) {
       // Storage'a da erişilemezse hard-coded defaults
@@ -1196,13 +1213,16 @@
   function listenForMessages() {
     // Birincil yöntem: chrome.storage.onChanged - iframe'lerde de çalışır
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'sync' || (area === 'local' && changes._lct_apiKey)) {
+      if (area === 'sync' || (area === 'local' && (changes._lct_apiKey || changes._lct_apiKey_enc))) {
         onSettingsChanged();
       }
     });
 
     // Yedek: runtime mesajları (top frame için)
-    chrome.runtime.onMessage.addListener((message) => {
+    chrome.runtime.onMessage.addListener((message, sender) => {
+      if (LCT_Guard && sender && !LCT_Guard.isValidRuntimeSender(sender)) {
+        return;
+      }
       if (message.type === 'SETTINGS_CHANGED') {
         onSettingsChanged();
       }
