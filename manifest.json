@@ -5,7 +5,8 @@
   "version": "0.2.1",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "management"
   ],
   "host_permissions": [
     "https://api.openai.com/*",

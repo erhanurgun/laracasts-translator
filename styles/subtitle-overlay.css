@@ -50,6 +50,20 @@
   font-weight: 500;
 }
 
+/* Orijinal (kaynak dil) bulanıklaştırma - öğrenme modu.
+   Kullanıcı önce kendi anlamaya/tahmin etmeye çalışır; gerekirse fare
+   ile orijinal metnin üzerine gelip netleştirir. Çeviri daima nettir. */
+#lct-subtitle-original.lct-blur {
+  filter: blur(0.3em);
+  transition: filter 0.18s ease;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+#lct-subtitle-original.lct-blur:hover {
+  filter: blur(0);
+}
+
 /* Fullscreen'de daha büyük */
 :fullscreen #lct-subtitle-container,
 :-webkit-full-screen #lct-subtitle-container {

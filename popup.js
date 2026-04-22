@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiKeyStatus: document.getElementById('apiKeyStatus'),
     showOriginal: document.getElementById('showOriginal'),
     showTranslation: document.getElementById('showTranslation'),
+    blurOriginal: document.getElementById('blurOriginal'),
     fontSize: document.getElementById('fontSize'),
     fontSizeValue: document.getElementById('fontSizeValue'),
     originalColor: document.getElementById('originalColor'),
@@ -22,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     els.enableToggle.checked = settings.enabled;
     els.showOriginal.checked = settings.showOriginal;
     els.showTranslation.checked = settings.showTranslation;
+    els.blurOriginal.checked = !!settings.blurOriginal;
     els.fontSize.value = settings.fontSize;
     els.fontSizeValue.textContent = settings.fontSize;
     els.originalColor.value = settings.originalColor;
@@ -73,8 +75,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Toggle'lar ve ayar değişiklikleri
-  els.enableToggle.addEventListener('change', () => {
-    Storage.saveSetting('enabled', els.enableToggle.checked);
+  els.enableToggle.addEventListener('change', async () => {
+    // Toggle kapatılırsa: eklentiyi chrome://extensions seviyesinde tamamen
+    // devre dışı bırak. Re-enable için kullanıcı chrome://extensions'a gider.
+    if (!els.enableToggle.checked) {
+      try {
+        // Storage'a yazmıyoruz - böylece re-enable sonrası default 'enabled: true'
+        // devreye girer ve eklenti normal çalışır.
+        await chrome.management.setEnabled(chrome.runtime.id, false);
+        // Bu çağrı başarılıysa popup kapanır, aşağısı çalışmaz.
+      } catch (e) {
+        console.error('Eklenti self-disable başarısız:', e);
+        // Fallback: en azından yumuşak devre dışı (overlay/çeviri durur)
+        await Storage.saveSetting('enabled', false);
+        broadcastSettingsChange();
+      }
+      return;
+    }
+    // Toggle açıksa (popup zaten eklenti aktifken açılır) - ayarı açık işaretle
+    await Storage.saveSetting('enabled', true);
     broadcastSettingsChange();
   });
 
@@ -85,6 +104,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   els.showTranslation.addEventListener('change', () => {
     Storage.saveSetting('showTranslation', els.showTranslation.checked);
+    broadcastSettingsChange();
+  });
+
+  els.blurOriginal.addEventListener('change', () => {
+    Storage.saveSetting('blurOriginal', els.blurOriginal.checked);
     broadcastSettingsChange();
   });
 
