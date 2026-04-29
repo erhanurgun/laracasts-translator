@@ -58,6 +58,109 @@ Valid subtitle`;
   });
 });
 
+describe('VTTParser.isLikelySubtitle()', () => {
+  it('boş veya null girdi için false dönmeli', () => {
+    expect(VTTParser.isLikelySubtitle([])).toBe(false);
+    expect(VTTParser.isLikelySubtitle(null)).toBe(false);
+    expect(VTTParser.isLikelySubtitle(undefined)).toBe(false);
+  });
+
+  it('normal altyazı cue\'ları için true dönmeli', () => {
+    const cues = [
+      { startTime: 0, endTime: 1, text: 'Hello world' },
+      { startTime: 1, endTime: 2, text: 'This is a subtitle' },
+      { startTime: 2, endTime: 3, text: 'Another line' }
+    ];
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(true);
+  });
+
+  it('Mux storyboard JPG URL cue\'ları için false dönmeli', () => {
+    const cues = [
+      { startTime: 0, endTime: 1, text: 'https://image.mux.com/abc/storyboard.jpg?time=0&width=320' },
+      { startTime: 1, endTime: 2, text: 'https://image.mux.com/abc/storyboard.jpg?time=1&width=320' },
+      { startTime: 2, endTime: 3, text: 'https://image.mux.com/abc/storyboard.jpg?time=2&width=320' },
+      { startTime: 3, endTime: 4, text: 'https://image.mux.com/abc/storyboard.jpg?time=3&width=320' },
+      { startTime: 4, endTime: 5, text: 'https://image.mux.com/abc/storyboard.jpg?time=4&width=320' }
+    ];
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(false);
+  });
+
+  it('parse(storyboardVTT) sonucu için false dönmeli (entegrasyon)', () => {
+    const storyboardVTT = `WEBVTT
+
+00:00:00.000 --> 00:00:01.000
+https://image.mux.com/abc123/storyboard.jpg?time=0&width=320
+
+00:00:01.000 --> 00:00:02.000
+https://image.mux.com/abc123/storyboard.jpg?time=1&width=320
+
+00:00:02.000 --> 00:00:03.000
+https://image.mux.com/abc123/storyboard.jpg?time=2&width=320
+
+00:00:03.000 --> 00:00:04.000
+https://image.mux.com/abc123/storyboard.jpg?time=3&width=320
+
+00:00:04.000 --> 00:00:05.000
+https://image.mux.com/abc123/storyboard.jpg?time=4&width=320`;
+    const cues = VTTParser.parse(storyboardVTT);
+    expect(cues.length).toBeGreaterThan(0);
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(false);
+  });
+
+  it('PNG/WEBP/GIF thumbnail URL\'lerini de yakalamalı', () => {
+    const cues = [
+      { startTime: 0, endTime: 1, text: 'https://cdn.example.com/thumb1.png' },
+      { startTime: 1, endTime: 2, text: 'https://cdn.example.com/thumb2.webp?w=320' },
+      { startTime: 2, endTime: 3, text: 'https://cdn.example.com/thumb3.gif#t=0' }
+    ];
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(false);
+  });
+
+  it('1-2 URL barındıran ama çoğunluğu metin olan altyazılar için true dönmeli', () => {
+    const cues = [
+      { startTime: 0, endTime: 1, text: 'Welcome to the lesson' },
+      { startTime: 1, endTime: 2, text: 'See https://example.com/foo.jpg for reference' },
+      { startTime: 2, endTime: 3, text: 'Today we discuss closures' },
+      { startTime: 3, endTime: 4, text: 'And anonymous functions' },
+      { startTime: 4, endTime: 5, text: 'Let us begin' }
+    ];
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(true);
+  });
+
+  it('text alanındaki başta/sonda boşlukları normalize etmeli', () => {
+    const cues = [
+      { startTime: 0, endTime: 1, text: '   https://image.mux.com/x/storyboard.jpg?t=0   ' },
+      { startTime: 1, endTime: 2, text: '\thttps://image.mux.com/x/storyboard.jpg?t=1\n' }
+    ];
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(false);
+  });
+
+  it('cue.text alanı eksikse güvenle çalışmalı', () => {
+    const cues = [
+      { startTime: 0, endTime: 1 },
+      { startTime: 1, endTime: 2, text: null },
+      { startTime: 2, endTime: 3, text: undefined }
+    ];
+    // %60'tan az URL → true sayılmalı (URL hiç yok); kırılmamalı
+    expect(() => VTTParser.isLikelySubtitle(cues)).not.toThrow();
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(true);
+  });
+
+  it('tek cue + URL → false dönmeli', () => {
+    const cues = [
+      { startTime: 0, endTime: 1, text: 'https://image.mux.com/x/storyboard.jpg?t=0' }
+    ];
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(false);
+  });
+
+  it('tek cue + metin → true dönmeli', () => {
+    const cues = [
+      { startTime: 0, endTime: 1, text: 'Hello' }
+    ];
+    expect(VTTParser.isLikelySubtitle(cues)).toBe(true);
+  });
+});
+
 describe('VTTParser._parseTimestamp()', () => {
   it('HH:MM:SS.mmm parse etmeli', () => {
     expect(VTTParser._parseTimestamp('01:23:45.678')).toBe(5025.678);

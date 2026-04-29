@@ -322,17 +322,37 @@
     }
   }
 
+  /**
+   * <track> elementlerinden gerçek altyazı VTT URL'sini seçer.
+   *
+   * Mux Player gibi oynatıcılar shadow DOM'a kind="metadata" / kind="thumbnails"
+   * ile storyboard preview track'i ekler. Bu URL'ler (storyboard.vtt) altyazı değil,
+   * timeline hover thumbnail'idir. Eskiden fallback "any src" döngüsü bu track'i
+   * yanlışlıkla altyazı sanıyordu; bu nedenle katı kind kontrolü uygulanır.
+   */
   function findVTTUrl(video) {
     const tracks = video.querySelectorAll('track');
-    for (const track of tracks) {
-      // İngilizce altyazı tercih et
-      if (track.src && (track.srclang === 'en' || track.kind === 'captions' || track.kind === 'subtitles')) {
-        return track.src;
+    const isSubtitleKind = (k) => k === 'captions' || k === 'subtitles';
+    // Storyboard/thumbnail URL'lerini ekstra savunma olarak reddet
+    const isSafeUrl = (src) => !!src && !/\b(storyboard|thumbnails?)\b/i.test(src);
+
+    // Öncelik 1: İngilizce captions/subtitles
+    for (const t of tracks) {
+      if (isSubtitleKind(t.kind) && t.srclang === 'en' && isSafeUrl(t.src)) {
+        return t.src;
       }
     }
-    // Herhangi bir track al
-    for (const track of tracks) {
-      if (track.src) return track.src;
+    // Öncelik 2: Herhangi bir captions/subtitles
+    for (const t of tracks) {
+      if (isSubtitleKind(t.kind) && isSafeUrl(t.src)) {
+        return t.src;
+      }
+    }
+    // Öncelik 3: kind boş ama srclang=en (legacy player'lar)
+    for (const t of tracks) {
+      if (!t.kind && t.srclang === 'en' && isSafeUrl(t.src)) {
+        return t.src;
+      }
     }
     return null;
   }
@@ -367,11 +387,8 @@
       }
     }
 
-    // Hiçbir uygun track yoksa ilk track'i dene
-    if (!targetTrack && textTracks.length > 0) {
-      targetTrack = textTracks[0];
-    }
-
+    // Mux Player metadata/thumbnails track'lerini reddet:
+    // captions/subtitles dışındaki kind'lar storyboard içerebilir, altyazı değil.
     if (!targetTrack) return null;
 
     // Cue'lara erişmek için mode geçici olarak 'hidden' olmalı
@@ -572,6 +589,13 @@
         return;
       }
 
+      // Defansif: TextTrack içeriği gerçekten altyazı mı? (storyboard/thumbnail filtre)
+      if (!VTTParser.isLikelySubtitle(cues)) {
+        console.warn('LCT: TextTrack içeriği altyazı değil (muhtemelen metadata/thumbnails), atlanıyor');
+        showMessage('Bu video için altyazı bulunamadı');
+        return;
+      }
+
       // Cue'ları startTime'a göre sırala ve uzun olanları böl
       cues.sort((a, b) => a.startTime - b.startTime);
       cues = cues.flatMap(c => splitLongCue(c));
@@ -621,6 +645,13 @@
       let cues = VTTParser.parse(vttText);
       if (cues.length === 0) {
         showMessage('Altyazı bulunamadı');
+        return;
+      }
+
+      // Defansif: VTT gerçekten altyazı mı? (Mux storyboard.vtt yakalanırsa burada filtrelenir)
+      if (!VTTParser.isLikelySubtitle(cues)) {
+        console.warn('LCT: VTT içeriği altyazı değil (muhtemelen storyboard/thumbnail), atlanıyor');
+        showMessage('Bu video için altyazı bulunamadı');
         return;
       }
 
