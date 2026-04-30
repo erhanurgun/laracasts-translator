@@ -283,7 +283,76 @@
   let ccHideStyle = null;
 
   function disableNativeTextTracks(video) {
+    // Native track'leri gizlemek için disable kullanıyoruz,
+    // Ancak MuxPlayer gibi streaming player'larda mode="hidden" olması VTT parçalarının 
+    // ağdan inmeye devam etmesi için zorunludur. (mode="disabled" demezsek).
+    // Bu yüzden lib klasöründeki fonksiyona ek olarak kendimiz track'leri periyodik zorluyoruz.
     nativeTrackHandle = LCT_NativeHandler ? LCT_NativeHandler.disable(video) : null;
+    
+    if (!video._lctDebugInterval) {
+      video._lctDebugInterval = setInterval(() => {
+        let debugLog = [];
+        let hasNew = false;
+
+        for(let i = 0; i < video.textTracks.length; i++) {
+          const track = video.textTracks[i];
+          
+          if ((track.kind === 'captions' || track.kind === 'subtitles') && track.mode === 'disabled') {
+              track.mode = 'hidden'; // Ağdan veri inmeye devam etsin
+          }
+
+          // Eğer track içinde yeni inen satırlar (cues) varsa bunları işle
+          if (track.cues && track.cues.length > 0 && (track.kind === 'captions' || track.kind === 'subtitles') && typeof parsedOriginalCues !== 'undefined') {
+             for (let j = 0; j < track.cues.length; j++) {
+                const rawCue = track.cues[j];
+                
+                // Formasyon ve split işlemleri
+                const subCues = splitLongCue({
+                   id: rawCue.id || String(rawCue.startTime),
+                   startTime: rawCue.startTime,
+                   endTime: rawCue.endTime,
+                   text: rawCue.text
+                });
+
+                for (const sc of subCues) {
+                   // Ana listede bu altyazı dilimi var mı? 
+                   // (Sürelerde 0.1 sn kayma olabilir, ihtimale karşı "text" ile de teyit edelim + ya da sadece süre)
+                   const exists = parsedOriginalCues.some(c => Math.abs(c.startTime - sc.startTime) < 0.1 || c.text === sc.text);
+                   
+                   if (!exists) {
+                      parsedOriginalCues.push(sc);
+                      currentCues.push({ ...sc, translation: '' });
+                      
+                      if (!window._lctPendingStreamCues) window._lctPendingStreamCues = [];
+                      window._lctPendingStreamCues.push(sc);
+                      hasNew = true;
+                   }
+                }
+             }
+          }
+
+          debugLog.push(`Track[${i}] kind=${track.kind} mode=${track.mode} cues=${track.cues ? track.cues.length : 0}`);
+        }
+        
+        // Eğer bu tarama turunda yeni parça yakaladıksa listeleri sıralayıp debounce üzerinden çeviriye gönder!
+        if (hasNew) {
+           parsedOriginalCues.sort((a,b) => a.startTime - b.startTime);
+           currentCues.sort((a,b) => a.startTime - b.startTime);
+           
+           clearTimeout(window._lctStreamDebounce);
+           window._lctStreamDebounce = setTimeout(() => {
+              if (window._lctPendingStreamCues && window._lctPendingStreamCues.length > 0) {
+                 const queue = window._lctPendingStreamCues;
+                 window._lctPendingStreamCues = [];
+                 if (typeof triggerStreamTranslation === 'function') {
+                    console.log(`LCT [POLLER]: ${queue.length} yeni altyazı parçası taramada bulundu, çeviriye itiliyor.`);
+                    triggerStreamTranslation(queue);
+                 }
+              }
+           }, 2000);
+        }
+      }, 5000); // 5 saniyede bir periyodik kontrol
+    }
   }
 
   function enableNativeTextTracks(video) {
@@ -416,8 +485,60 @@
       });
     }
 
-    // Native track'i tekrar kapat (kendi overlay'imizi kullanacağız)
-    targetTrack.mode = 'disabled';
+    // Eklenti kendi overlay'ini göstereceği için native track görünmez olmalı,
+    // ancak 'disabled' yaparsak HLS/DASH altyapısı yeni VTT parçalarını (chunk) indirmeyi durdurur.
+    // Sürekli inmeye devam etmesi için 'hidden' olarak bırakıyoruz.
+    targetTrack.mode = 'hidden';
+
+    // Dinamik olarak yeni eklenen (chunk) altyazıları yakalamak için listener/poller
+    if (!targetTrack._lctBound) {
+      targetTrack._lctBound = true;
+      targetTrack.addEventListener('addcue', (e) => {
+        window._lctLastCueAdded = new Date();
+        const rawCue = e.cue;
+        console.log('LCT[DEBUG]: Yeni altyazı (chunk) parçası eklendi!', 'Start:', rawCue.startTime, 'Text:', rawCue.text.slice(0, 30));
+        
+        // Sadece yeni parçaları formata çevir
+        const newCues = splitLongCue({
+           id: rawCue.id || String(rawCue.startTime),
+           startTime: rawCue.startTime,
+           endTime: rawCue.endTime,
+           text: rawCue.text
+        });
+
+        let hasNew = false;
+        for (const sc of newCues) {
+           // Mevcut havuzda olup olmadığına kontrol (0.1 sn esneklik ve metin eşleşmesi)
+           const exists = currentCues.some(c => Math.abs(c.startTime - sc.startTime) < 0.1 && c.text === sc.text);
+           if (!exists) {
+              parsedOriginalCues.push(sc);
+              currentCues.push({ ...sc, translation: '' });
+              
+              if (!window._lctPendingStreamCues) window._lctPendingStreamCues = [];
+              window._lctPendingStreamCues.push(sc);
+              hasNew = true;
+           }
+        }
+
+        if (hasNew) {
+           // Listeleri sıralı tut ki video ilerledikçe binary search altyazıyı doğru eşleştirsin!
+           parsedOriginalCues.sort((a,b) => a.startTime - b.startTime);
+           currentCues.sort((a,b) => a.startTime - b.startTime);
+           
+           clearTimeout(window._lctStreamDebounce);
+           // 3 saniye içinde yeni chunk gelmezse toplu halde çeviriye yolla
+           window._lctStreamDebounce = setTimeout(() => {
+              if (window._lctPendingStreamCues && window._lctPendingStreamCues.length > 0) {
+                 const queue = window._lctPendingStreamCues;
+                 window._lctPendingStreamCues = [];
+                 if (typeof triggerStreamTranslation === 'function') {
+                    triggerStreamTranslation(queue);
+                 }
+              }
+           }, 3000);
+        }
+      });
+    }
 
     console.log(`LCT: TextTrack API ile ${result.length} cue bulundu (lang: ${targetTrack.language || 'bilinmiyor'})`);
     return result;
@@ -796,6 +917,48 @@
     });
 
     orchestrator.start(parsedOriginalCues, videoId);
+  }
+
+  // Mux Player / Streaming videolardaki sonradan inen altyazıları çevirir
+  window.triggerStreamTranslation = function(queueCues) {
+    if (!queueCues || queueCues.length === 0) return;
+    if (!settings || !settings.hasApiKey || !LCT_Orchestrator) return;
+
+    console.log(`LCT: Streaming ${queueCues.length} yeni satır çeviriye yollanıyor...`);
+    const baseVideoId = extractVideoId();
+    // Cache karışmaması için her chunk'ı başlangıç saniyesine göre klasörle
+    const chunkId = baseVideoId + '_chunk_' + Math.floor(queueCues[0].startTime);
+
+    const chunkOrch = LCT_Orchestrator.create({
+      maxRetries: 2,
+      onProgress: () => {},
+      onBatchResult: ({ startIndex, cues: batchCues }) => {
+        // Yeni çevrilen veriyi global currentCues listesinde yerine yamala
+        for (let i = 0; i < batchCues.length; i++) {
+          const tc = batchCues[i];
+          const memIndex = currentCues.findIndex(c => Math.abs(c.startTime - tc.startTime) < 0.1 && c.text === tc.text);
+          if (memIndex !== -1 && tc.translation) {
+            currentCues[memIndex].translation = tc.translation;
+          }
+        }
+      },
+      onComplete: (finalCues) => {
+        console.log(`LCT: Ekstra streaming çeviri parçası tamamlandı. (${finalCues.length} satır)`);
+        // Son güvenlik: Eksik kalan varsa tekrar match and merge
+        for (let i = 0; i < finalCues.length; i++) {
+          const fc = finalCues[i];
+          const memIndex = currentCues.findIndex(c => Math.abs(c.startTime - fc.startTime) < 0.1 && c.text === fc.text);
+          if (memIndex !== -1 && fc.translation) {
+            currentCues[memIndex].translation = fc.translation;
+          }
+        }
+      },
+      onError: (msg) => console.log('LCT: Streaming chunk hatası:', msg),
+      onRetry: () => {},
+      onAbandon: () => {}
+    });
+
+    chunkOrch.start(queueCues, chunkId);
   }
 
   async function fetchVTT(url) {
