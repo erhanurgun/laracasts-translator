@@ -284,88 +284,28 @@
   let ccHideStyle = null;
 
   function disableNativeTextTracks(video) {
-    // Native track'leri gizlemek için disable kullanıyoruz,
-    // Ancak MuxPlayer gibi streaming player'larda mode="hidden" olması VTT parçalarının 
-    // ağdan inmeye devam etmesi için zorunludur. (mode="disabled" demezsek).
-    // Bu yüzden lib klasöründeki fonksiyona ek olarak kendimiz track'leri periyodik zorluyoruz.
+    // Native track'leri overlay ile çakışmaması için kapatıyoruz; ancak Mux Player
+    // gibi streaming player'larda mode='disabled' WebVTT chunk indirimini durdurur.
+    // Bu nedenle disable edilen track'leri periyodik olarak 'hidden' moduna zorluyoruz:
+    // chunk'lar inmeye devam eder, addcue listener yeni cue'ları yakalar.
     nativeTrackHandle = LCT_NativeHandler ? LCT_NativeHandler.disable(video) : null;
-    
-    if (!video._lctDebugInterval) {
-      video._lctDebugInterval = setInterval(() => {
-        let hasNew = false;
 
-        for(let i = 0; i < video.textTracks.length; i++) {
+    if (!video._lctTrackModeWatcher) {
+      video._lctTrackModeWatcher = setInterval(() => {
+        for (let i = 0; i < video.textTracks.length; i++) {
           const track = video.textTracks[i];
-          
           if ((track.kind === 'captions' || track.kind === 'subtitles') && track.mode === 'disabled') {
-              track.mode = 'hidden'; // Ağdan veri inmeye devam etsin
-          }
-
-          // Eğer track içinde yeni inen satırlar (cues) varsa bunları işle (Incremental tarama)
-          if (track.cues && track.cues.length > 0 && (track.kind === 'captions' || track.kind === 'subtitles') && typeof parsedOriginalCues !== 'undefined') {
-             if (typeof track._lctLastProcessedIndex === 'undefined') {
-                track._lctLastProcessedIndex = -1;
-             }
-             
-             for (let j = track._lctLastProcessedIndex + 1; j < track.cues.length; j++) {
-                const rawCue = track.cues[j];
-                track._lctLastProcessedIndex = j;
-                
-                // Formasyon ve split işlemleri
-                const subCues = splitLongCue({
-                   id: rawCue.id || String(rawCue.startTime),
-                   startTime: rawCue.startTime,
-                   endTime: rawCue.endTime,
-                   text: rawCue.text
-                });
-
-                for (const sc of subCues) {
-                   // Ana listede bu altyazı dilimi var mı? 
-                   // (Sürelerde 0.1 sn kayma olabilir, kesinlik için süre + metin beraber kontrol edilmeli)
-                   const exists = parsedOriginalCues.some(c => 
-                      Math.abs(c.startTime - sc.startTime) < 0.1 && 
-                      Math.abs(c.endTime - sc.endTime) < 0.1 && 
-                      c.text === sc.text
-                   );
-                   
-                   if (!exists) {
-                      parsedOriginalCues.push(sc);
-                      currentCues.push({ ...sc, translation: '' });
-                      
-                      if (!window._lctPendingStreamCues) window._lctPendingStreamCues = [];
-                      window._lctPendingStreamCues.push(sc);
-                      hasNew = true;
-                   }
-                }
-             }
+            track.mode = 'hidden';
           }
         }
-        
-        // Eğer bu tarama turunda yeni parça yakaladıksa listeleri sıralayıp debounce üzerinden çeviriye gönder!
-        if (hasNew) {
-           parsedOriginalCues.sort((a,b) => a.startTime - b.startTime);
-           currentCues.sort((a,b) => a.startTime - b.startTime);
-           
-           clearTimeout(window._lctStreamDebounce);
-           window._lctStreamDebounce = setTimeout(() => {
-              if (window._lctPendingStreamCues && window._lctPendingStreamCues.length > 0) {
-                 const queue = window._lctPendingStreamCues;
-                 window._lctPendingStreamCues = [];
-                 if (typeof triggerStreamTranslation === 'function') {
-                    // console.debug(`LCT [POLLER]: ${queue.length} yeni altyazı parçası taramada bulundu, çeviriye itiliyor.`);
-                    triggerStreamTranslation(queue);
-                 }
-              }
-           }, 2000);
-        }
-      }, 5000); // 5 saniyede bir periyodik kontrol
+      }, 15000);
     }
   }
 
   function enableNativeTextTracks(video) {
-    if (video && video._lctDebugInterval) {
-      clearInterval(video._lctDebugInterval);
-      video._lctDebugInterval = null;
+    if (video && video._lctTrackModeWatcher) {
+      clearInterval(video._lctTrackModeWatcher);
+      video._lctTrackModeWatcher = null;
     }
     if (LCT_NativeHandler) LCT_NativeHandler.restore(nativeTrackHandle);
     nativeTrackHandle = null;
@@ -501,53 +441,54 @@
     // Sürekli inmeye devam etmesi için 'hidden' olarak bırakıyoruz.
     targetTrack.mode = 'hidden';
 
-    // Dinamik olarak yeni eklenen (chunk) altyazıları yakalamak için listener/poller
+    // HLS chunk'ları geldikçe addcue event'i ile yakalanır.
+    // Named handler kullanmamızın sebebi: track swap (Mux quality switch, SPA navigasyon)
+    // sırasında cleanup() içinde removeEventListener ile sökülebilmesi.
     if (!targetTrack._lctBound) {
       targetTrack._lctBound = true;
-      targetTrack.addEventListener('addcue', (e) => {
+      const onAddCueHandler = (e) => {
         const rawCue = e.cue;
-        // console.debug('LCT[DEBUG]: Yeni altyazı (chunk) parçası eklendi!', 'Start:', rawCue.startTime);
-        
-        // Sadece yeni parçaları formata çevir
         const newCues = splitLongCue({
-           id: rawCue.id || String(rawCue.startTime),
-           startTime: rawCue.startTime,
-           endTime: rawCue.endTime,
-           text: rawCue.text
+          id: rawCue.id || String(rawCue.startTime),
+          startTime: rawCue.startTime,
+          endTime: rawCue.endTime,
+          text: rawCue.text
         });
 
         let hasNew = false;
         for (const sc of newCues) {
-           // Mevcut havuzda olup olmadığına kontrol (0.1 sn esneklik ve metin eşleşmesi)
-           const exists = currentCues.some(c => Math.abs(c.startTime - sc.startTime) < 0.1 && c.text === sc.text);
-           if (!exists) {
-              parsedOriginalCues.push(sc);
-              currentCues.push({ ...sc, translation: '' });
-              
-              if (!window._lctPendingStreamCues) window._lctPendingStreamCues = [];
-              window._lctPendingStreamCues.push(sc);
-              hasNew = true;
-           }
+          // Süre toleransı 0.1sn + metin eşleşmesi: aynı cue'nun mükerrer eklenmesini önler
+          const exists = currentCues.some(c => Math.abs(c.startTime - sc.startTime) < 0.1 && c.text === sc.text);
+          if (!exists) {
+            parsedOriginalCues.push(sc);
+            currentCues.push({ ...sc, translation: '' });
+
+            if (!window._lctPendingStreamCues) window._lctPendingStreamCues = [];
+            window._lctPendingStreamCues.push(sc);
+            hasNew = true;
+          }
         }
 
         if (hasNew) {
-           // Listeleri sıralı tut ki video ilerledikçe binary search altyazıyı doğru eşleştirsin!
-           parsedOriginalCues.sort((a,b) => a.startTime - b.startTime);
-           currentCues.sort((a,b) => a.startTime - b.startTime);
-           
-           clearTimeout(window._lctStreamDebounce);
-           // 3 saniye içinde yeni chunk gelmezse toplu halde çeviriye yolla
-           window._lctStreamDebounce = setTimeout(() => {
-              if (window._lctPendingStreamCues && window._lctPendingStreamCues.length > 0) {
-                 const queue = window._lctPendingStreamCues;
-                 window._lctPendingStreamCues = [];
-                 if (typeof triggerStreamTranslation === 'function') {
-                    triggerStreamTranslation(queue);
-                 }
+          // Sıralı tutulmasının sebebi: findActiveCue binary search ile match yapıyor
+          parsedOriginalCues.sort((a, b) => a.startTime - b.startTime);
+          currentCues.sort((a, b) => a.startTime - b.startTime);
+
+          clearTimeout(window._lctStreamDebounce);
+          // 3 saniye sessizlik sonrası birikmiş chunk'ları toplu çeviriye yolla
+          window._lctStreamDebounce = setTimeout(() => {
+            if (window._lctPendingStreamCues && window._lctPendingStreamCues.length > 0) {
+              const queue = window._lctPendingStreamCues;
+              window._lctPendingStreamCues = [];
+              if (typeof triggerStreamTranslation === 'function') {
+                triggerStreamTranslation(queue);
               }
-           }, 3000);
+            }
+          }, 3000);
         }
-      });
+      };
+      targetTrack.addEventListener('addcue', onAddCueHandler);
+      targetTrack._lctAddCueHandler = onAddCueHandler;
     }
 
     console.log(`LCT: TextTrack API ile ${result.length} cue bulundu (lang: ${targetTrack.language || 'bilinmiyor'})`);
@@ -972,10 +913,17 @@
             currentCues[memIndex].translation = fc.translation;
           }
         }
+        // Tamamlanan orchestrator'ı array'den çıkar (memory leak önleme)
+        activeChunkOrchestrators = activeChunkOrchestrators.filter(o => o !== chunkOrch);
       },
-      onError: (msg) => console.log('LCT: Streaming chunk hatası:', msg),
+      onError: (msg) => {
+        console.log('LCT: Streaming chunk hatası:', msg);
+        activeChunkOrchestrators = activeChunkOrchestrators.filter(o => o !== chunkOrch);
+      },
       onRetry: () => {},
-      onAbandon: () => {}
+      onAbandon: () => {
+        activeChunkOrchestrators = activeChunkOrchestrators.filter(o => o !== chunkOrch);
+      }
     });
 
     activeChunkOrchestrators.push(chunkOrch);
@@ -1168,12 +1116,28 @@
       activeChunkOrchestrators.forEach(orch => orch.cancel());
       activeChunkOrchestrators = [];
     }
+    // Stream debounce timer ve queue temizliği:
+    // SPA navigasyonda eski cue'ların yeni videonun listesine yamalanmasını önler
+    if (window._lctStreamDebounce) {
+      clearTimeout(window._lctStreamDebounce);
+      window._lctStreamDebounce = null;
+    }
+    window._lctPendingStreamCues = null;
     // Video değişiklik observer'ını temizle (SPA navigasyonda yetim kalmasını önler)
     if (videoObserver) {
       videoObserver.disconnect();
       videoObserver = null;
     }
     if (currentVideo) {
+      // addcue listener'larını track'lerden sök (track swap'ta orphan listener önler)
+      for (let i = 0; i < currentVideo.textTracks.length; i++) {
+        const track = currentVideo.textTracks[i];
+        if (track._lctAddCueHandler) {
+          track.removeEventListener('addcue', track._lctAddCueHandler);
+          track._lctAddCueHandler = null;
+          track._lctBound = false;
+        }
+      }
       enableNativeTextTracks(currentVideo);
       showCCButton();
       currentVideo.removeEventListener('timeupdate', onTimeUpdate);
