@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Sürüm-0.4.1-blue" alt="Sürüm">
+  <img src="https://img.shields.io/badge/Sürüm-0.4.2-blue" alt="Sürüm">
   <img src="https://img.shields.io/badge/Lisans-MIT-green" alt="Lisans">
   <img src="https://img.shields.io/badge/Chrome-v116%2B-yellow" alt="Chrome">
   <img src="https://img.shields.io/badge/Manifest-v3-orange" alt="Manifest V3">
