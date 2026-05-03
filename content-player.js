@@ -73,6 +73,7 @@
   let translationProgress = { current: 0, total: 0 };
   // Orchestrator içinde port + epoch + retry + isStale yönetilir
   let orchestrator = null;
+  let activeChunkOrchestrators = [];
 
   // Cache fingerprint (lib/fingerprint.js delegate)
   function createFingerprint(cues) {
@@ -351,7 +352,7 @@
                  const queue = window._lctPendingStreamCues;
                  window._lctPendingStreamCues = [];
                  if (typeof triggerStreamTranslation === 'function') {
-                    console.log(`LCT [POLLER]: ${queue.length} yeni altyazı parçası taramada bulundu, çeviriye itiliyor.`);
+                    // console.debug(`LCT [POLLER]: ${queue.length} yeni altyazı parçası taramada bulundu, çeviriye itiliyor.`);
                     triggerStreamTranslation(queue);
                  }
               }
@@ -362,6 +363,10 @@
   }
 
   function enableNativeTextTracks(video) {
+    if (video && video._lctDebugInterval) {
+      clearInterval(video._lctDebugInterval);
+      video._lctDebugInterval = null;
+    }
     if (LCT_NativeHandler) LCT_NativeHandler.restore(nativeTrackHandle);
     nativeTrackHandle = null;
     // Laracasts'te video kendi CC'sini tekrar gösterebilsin diye mode'u showing'e çevir
@@ -500,9 +505,8 @@
     if (!targetTrack._lctBound) {
       targetTrack._lctBound = true;
       targetTrack.addEventListener('addcue', (e) => {
-        window._lctLastCueAdded = new Date();
         const rawCue = e.cue;
-        console.log('LCT[DEBUG]: Yeni altyazı (chunk) parçası eklendi!', 'Start:', rawCue.startTime, 'Text:', rawCue.text.slice(0, 30));
+        // console.debug('LCT[DEBUG]: Yeni altyazı (chunk) parçası eklendi!', 'Start:', rawCue.startTime);
         
         // Sadece yeni parçaları formata çevir
         const newCues = splitLongCue({
@@ -974,6 +978,7 @@
       onAbandon: () => {}
     });
 
+    activeChunkOrchestrators.push(chunkOrch);
     chunkOrch.start(queueCues, chunkId);
   }
 
@@ -1158,6 +1163,10 @@
     if (orchestrator) {
       orchestrator.cancel();
       orchestrator = null;
+    }
+    if (activeChunkOrchestrators && activeChunkOrchestrators.length > 0) {
+      activeChunkOrchestrators.forEach(orch => orch.cancel());
+      activeChunkOrchestrators = [];
     }
     // Video değişiklik observer'ını temizle (SPA navigasyonda yetim kalmasını önler)
     if (videoObserver) {
