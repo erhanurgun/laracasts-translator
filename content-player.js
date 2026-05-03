@@ -291,7 +291,6 @@
     
     if (!video._lctDebugInterval) {
       video._lctDebugInterval = setInterval(() => {
-        let debugLog = [];
         let hasNew = false;
 
         for(let i = 0; i < video.textTracks.length; i++) {
@@ -301,10 +300,15 @@
               track.mode = 'hidden'; // Ağdan veri inmeye devam etsin
           }
 
-          // Eğer track içinde yeni inen satırlar (cues) varsa bunları işle
+          // Eğer track içinde yeni inen satırlar (cues) varsa bunları işle (Incremental tarama)
           if (track.cues && track.cues.length > 0 && (track.kind === 'captions' || track.kind === 'subtitles') && typeof parsedOriginalCues !== 'undefined') {
-             for (let j = 0; j < track.cues.length; j++) {
+             if (typeof track._lctLastProcessedIndex === 'undefined') {
+                track._lctLastProcessedIndex = -1;
+             }
+             
+             for (let j = track._lctLastProcessedIndex + 1; j < track.cues.length; j++) {
                 const rawCue = track.cues[j];
+                track._lctLastProcessedIndex = j;
                 
                 // Formasyon ve split işlemleri
                 const subCues = splitLongCue({
@@ -316,8 +320,12 @@
 
                 for (const sc of subCues) {
                    // Ana listede bu altyazı dilimi var mı? 
-                   // (Sürelerde 0.1 sn kayma olabilir, ihtimale karşı "text" ile de teyit edelim + ya da sadece süre)
-                   const exists = parsedOriginalCues.some(c => Math.abs(c.startTime - sc.startTime) < 0.1 || c.text === sc.text);
+                   // (Sürelerde 0.1 sn kayma olabilir, kesinlik için süre + metin beraber kontrol edilmeli)
+                   const exists = parsedOriginalCues.some(c => 
+                      Math.abs(c.startTime - sc.startTime) < 0.1 && 
+                      Math.abs(c.endTime - sc.endTime) < 0.1 && 
+                      c.text === sc.text
+                   );
                    
                    if (!exists) {
                       parsedOriginalCues.push(sc);
@@ -330,8 +338,6 @@
                 }
              }
           }
-
-          debugLog.push(`Track[${i}] kind=${track.kind} mode=${track.mode} cues=${track.cues ? track.cues.length : 0}`);
         }
         
         // Eğer bu tarama turunda yeni parça yakaladıksa listeleri sıralayıp debounce üzerinden çeviriye gönder!
@@ -866,15 +872,25 @@
       },
       onBatchResult: ({ startIndex, cues: batchCues }) => {
         for (let i = 0; i < batchCues.length; i++) {
-          if (currentCues[startIndex + i]) {
-            currentCues[startIndex + i].translation = batchCues[i].translation;
+          const tc = batchCues[i];
+          const memIndex = currentCues.findIndex(c => Math.abs(c.startTime - tc.startTime) < 0.1 && c.text === tc.text);
+          if (memIndex !== -1 && tc.translation) {
+            currentCues[memIndex].translation = tc.translation;
           }
         }
         console.log(`LCT: Batch ${Math.floor(startIndex / 50) + 1} uygulandı (index ${startIndex}-${startIndex + batchCues.length - 1})`);
         statusMessage = null;
       },
       onComplete: (finalCues) => {
-        currentCues = finalCues;
+        // Stream (Mux) sırasında eklenen yeni satırların "currentCues" üzerinden kaybolmaması için direkt atama yapmak yerine güvenli yamalama yapıyoruz.
+        for (let i = 0; i < finalCues.length; i++) {
+          const fc = finalCues[i];
+          const memIndex = currentCues.findIndex(c => Math.abs(c.startTime - fc.startTime) < 0.1 && c.text === fc.text);
+          if (memIndex !== -1 && fc.translation && !currentCues[memIndex].translation) {
+            currentCues[memIndex].translation = fc.translation;
+          }
+        }
+
         translationState = 'done';
         console.log('LCT: Çeviri tamamlandı');
 
