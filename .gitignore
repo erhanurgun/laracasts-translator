@@ -8,3 +8,7 @@
 
 /.claude
 CLAUDE.md
+
+/.specify
+/graphify-out
+.graphifyignore
