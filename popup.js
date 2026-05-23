@@ -66,6 +66,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     els.bgOpacityValue.textContent = Math.round(settings.bgOpacity * 100);
     els.uiLanguage.value = settings.uiLanguage;
     els.targetLanguage.value = settings.targetLanguage;
+    // apiKey'i de UI'a yansıt (loadModels'in popup açılışta sk-... görmesi için)
+    if (typeof settings.apiKey === 'string') {
+      els.apiKey.value = settings.apiKey;
+    }
     // openaiModel dropdown'u modeller yüklendikten sonra doldurulur, kullanıcı seçimi
     // populateModels içinde uygulanır.
   }
@@ -172,18 +176,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const settings = await Storage.getSettings();
   populateUiLanguage();
   populateTargetLanguage();
-  applySettingsToUI(settings);
-  applyI18n(settings.uiLanguage);
-  await loadModels(false);
-  els.apiKey.value = settings.apiKey;
-
-  // refreshApiKeyStatus dinamiktir; apiKey alanına ilk değer atandıktan sonra
-  // status'u doğru göstermek için bir kez daha çağırıyoruz.
-  refreshApiKeyStatus();
-  if (settings.apiKey) {
-    els.apiKeyStatus.textContent = I18N.t('popup.apiKey.saved', currentUiLang);
-    els.apiKeyStatus.className = 'status success';
-  }
+  applySettingsToUI(settings); // apiKey burada UI'a yazılır
+  applyI18n(settings.uiLanguage); // i18n + refreshApiKeyStatus (apiKey set olduğu için doğru gösterilir)
+  await loadModels(false); // apiKey görünür, kayıtlıysa fetch tetikler
 
   // API key göster/gizle
   els.toggleApiKey.addEventListener('click', () => {
