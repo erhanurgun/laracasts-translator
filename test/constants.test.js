@@ -55,8 +55,8 @@ describe('LCTConstants', () => {
     expect(LCTConstants.DEFAULT_SETTINGS.targetLanguage).toBe('tr');
   });
 
-  it('DEFAULT_SETTINGS openaiModel gpt-4o olmalı', () => {
-    expect(LCTConstants.DEFAULT_SETTINGS.openaiModel).toBe('gpt-4o');
+  it('DEFAULT_SETTINGS openaiModel gpt-5.4-nano olmalı', () => {
+    expect(LCTConstants.DEFAULT_SETTINGS.openaiModel).toBe('gpt-5.4-nano');
   });
 
   it('OPENAI_MODELS_ENDPOINT /v1/models adresi olmalı', () => {

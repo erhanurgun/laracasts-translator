@@ -29,7 +29,7 @@ Format [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standardını ta
 - `LCTCacheKeys.isTranslationKey` regex'i `/^translation_(.+)_([a-z]{2}(?:-[A-Z]{2})?)$/` (BCP-47 uyumlu)
 - Popup tüm hardcoded string'ler `data-i18n` öznitelikleriyle işaretlendi, dil değişiminde anlık uygulanır
 - Popup'a "Dil ve Model" bölümü eklendi: arayüz dili, çeviri hedef dili, OpenAI modeli + yenile butonu, model status alanı
-- `DEFAULT_SETTINGS`: `uiLanguage: 'tr'`, `targetLanguage: 'tr'`, `openaiModel: 'gpt-4o'` alanları eklendi
+- `DEFAULT_SETTINGS`: `uiLanguage: 'tr'`, `targetLanguage: 'tr'`, `openaiModel: 'gpt-5.4-nano'` alanları eklendi
 - background importScripts: `lib/languages.js` ve `lib/model-fetch.js` eklendi
 
 ### Migration
