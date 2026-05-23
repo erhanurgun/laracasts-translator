@@ -105,35 +105,36 @@
   // --- SPA Navigasyon Algılama ---
 
   /**
-   * Inertia SPA navigasyonunu algılar.
-   * history.pushState/replaceState intercept + popstate event.
-   * Not: content-laracasts.js de pushState patch'liyor; script yükleme sırasına göre
-   * content-player.js ÖNCE patch'ler, content-laracasts.js üzerine patch'ler.
-   * Her wrapper bir öncekini apply ile çağırdığı için chain doğru çalışır.
+   * SPA navigasyonu algılar.
+   * lib/navigation-watcher.js: Navigation API + history.pushState/replaceState
+   * patch + popstate. Önceki document.body subtree:true MutationObserver
+   * yaklaşımı Mux Player progress bar mutation'larıyla spam'leniyordu,
+   * yerine olay-tabanlı + URL diff'li hafif izleyici geçti.
+   *
+   * URL değişiminde:
+   * 1) onPageChanged() çalışır (kendi cleanup + yeni video bul)
+   * 2) `lct:nav` CustomEvent fırlatılır; content-laracasts.js bunu dinler.
    */
   function watchForNavigation() {
-    let lastUrl = location.href;
+    if (typeof self.createNavigationWatcher !== 'function') {
+      console.warn('LCT: createNavigationWatcher yüklenemedi, MutationObserver fallback');
+      let lastUrl = location.href;
+      const onUrlChange = () => {
+        if (location.href === lastUrl) return;
+        lastUrl = location.href;
+        onPageChanged();
+      };
+      const navObserver = new MutationObserver(onUrlChange);
+      navObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
+      window.addEventListener('popstate', () => setTimeout(onUrlChange, 50));
+      return;
+    }
 
-    const onUrlChange = () => {
-      const newUrl = location.href;
-      if (newUrl === lastUrl) return;
-      lastUrl = newUrl;
+    self.createNavigationWatcher((newUrl) => {
       onPageChanged();
-    };
-
-    // Inertia SPA navigasyon algılama:
-    // Inertia pushState → URL güncellenir → Vue DOM'u re-render eder →
-    // MutationObserver tetiklenir → location.href kontrolü → navigasyon algılanır.
-    // Not: pushState intercept isolated world nedeniyle çalışmaz.
-    const navObserver = new MutationObserver(onUrlChange);
-    navObserver.observe(document.body || document.documentElement, {
-      childList: true,
-      subtree: true
-    });
-
-    // Browser back/forward
-    window.addEventListener('popstate', () => {
-      setTimeout(onUrlChange, 50);
+      try {
+        window.dispatchEvent(new CustomEvent('lct:nav', { detail: { url: newUrl } }));
+      } catch (_) { /* CustomEvent oluşturulamadı */ }
     });
   }
 
@@ -207,12 +208,23 @@
 
     if (check()) return;
 
-    // MutationObserver + polling kombinasyonu
+    // MutationObserver + polling kombinasyonu.
+    // Scope: mux-player veya video container'ı; bulamazsa body fallback.
+    // rAF batching: ardışık mutation'lar tek check() çağrısına coalesce edilir.
+    const observeTarget =
+      document.querySelector('mux-player, [class*="video-player"], [id*="player"], main') ||
+      document.body || document.documentElement;
+
+    let findRafToken = null;
     findVideoObserver = new MutationObserver(() => {
-      if (!currentVideo) check();
+      if (currentVideo || findRafToken) return;
+      findRafToken = requestAnimationFrame(() => {
+        findRafToken = null;
+        if (!currentVideo) check();
+      });
     });
 
-    findVideoObserver.observe(document.body || document.documentElement, {
+    findVideoObserver.observe(observeTarget, {
       childList: true,
       subtree: true
     });

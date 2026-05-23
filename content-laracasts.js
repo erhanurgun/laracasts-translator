@@ -74,27 +74,14 @@
 
   // --- SPA Navigasyon Tespiti ---
 
+  // content-player.js URL değişiminde 'lct:nav' CustomEvent fırlatır;
+  // burada duplikat MutationObserver + pushState patch çıkarıldı. Aynı
+  // dünyadaki iki content script aynı patch'i iki kez sarmalıyordu;
+  // şimdi tek kaynak (content-player.js + lib/navigation-watcher).
   function watchNavigation() {
-    let lastUrl = location.href;
-
-    // Livewire/Turbo navigasyon izleme
-    const observer = new MutationObserver(() => {
-      if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        onNavigate();
-      }
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    // popstate/pushstate desteği
+    window.addEventListener('lct:nav', onNavigate);
+    // popstate fallback (createNavigationWatcher yüklenmemişse)
     window.addEventListener('popstate', onNavigate);
-
-    const origPushState = history.pushState;
-    history.pushState = function () {
-      origPushState.apply(this, arguments);
-      onNavigate();
-    };
   }
 
   function onNavigate() {
