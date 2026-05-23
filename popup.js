@@ -13,10 +13,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     translationColor: document.getElementById('translationColor'),
     bgOpacity: document.getElementById('bgOpacity'),
     bgOpacityValue: document.getElementById('bgOpacityValue'),
+    uiLanguage: document.getElementById('uiLanguage'),
+    targetLanguage: document.getElementById('targetLanguage'),
+    openaiModel: document.getElementById('openaiModel'),
+    refreshModels: document.getElementById('refreshModels'),
+    modelStatus: document.getElementById('modelStatus'),
     cacheStats: document.getElementById('cacheStats'),
     clearCache: document.getElementById('clearCache'),
     resetDefaults: document.getElementById('resetDefaults')
   };
+
+  const Languages = self.LCTLanguages;
+  const I18N = self.LCT_I18N;
+  const C = self.LCTConstants;
+
+  let currentUiLang = 'tr';
+
+  function applyI18n(lang) {
+    currentUiLang = lang;
+    document.documentElement.lang = lang;
+    I18N.applyTo(document.body, lang);
+    // Dinamik içerikleri yeniden ürettir
+    refreshApiKeyStatus();
+    refreshCacheStats();
+  }
+
+  function refreshApiKeyStatus() {
+    const key = els.apiKey.value.trim();
+    if (!key) {
+      els.apiKeyStatus.textContent = I18N.t('popup.apiKey.missing', currentUiLang);
+      els.apiKeyStatus.className = 'status error';
+    } else if (key.startsWith('sk-')) {
+      els.apiKeyStatus.textContent = I18N.t('popup.apiKey.saved', currentUiLang);
+      els.apiKeyStatus.className = 'status success';
+    } else {
+      els.apiKeyStatus.textContent = I18N.t('popup.apiKey.invalidFormat', currentUiLang);
+      els.apiKeyStatus.className = 'status error';
+    }
+  }
 
   // Ayar değerlerini UI'a yansıtır (ilk yükleme ve reset için ortak)
   function applySettingsToUI(settings) {
@@ -30,15 +64,98 @@ document.addEventListener('DOMContentLoaded', async () => {
     els.translationColor.value = settings.translationColor;
     els.bgOpacity.value = Math.round(settings.bgOpacity * 100);
     els.bgOpacityValue.textContent = Math.round(settings.bgOpacity * 100);
+    els.uiLanguage.value = settings.uiLanguage;
+    els.targetLanguage.value = settings.targetLanguage;
+    // openaiModel dropdown'u modeller yüklendikten sonra doldurulur, kullanıcı seçimi
+    // populateModels içinde uygulanır.
+  }
+
+  function populateUiLanguage() {
+    const frag = document.createDocumentFragment();
+    for (const lang of Languages.UI) {
+      const opt = document.createElement('option');
+      opt.value = lang.code;
+      opt.textContent = lang.native;
+      frag.appendChild(opt);
+    }
+    els.uiLanguage.replaceChildren(frag);
+  }
+
+  function populateTargetLanguage() {
+    const frag = document.createDocumentFragment();
+    for (const lang of Languages.TARGET) {
+      const opt = document.createElement('option');
+      opt.value = lang.code;
+      opt.textContent = `${lang.native} (${lang.name})`;
+      frag.appendChild(opt);
+    }
+    els.targetLanguage.replaceChildren(frag);
+  }
+
+  function populateModels(models, activeModel) {
+    const frag = document.createDocumentFragment();
+    let activeFound = false;
+    for (const model of models) {
+      const opt = document.createElement('option');
+      opt.value = model;
+      opt.textContent = model;
+      if (model === activeModel) {
+        opt.selected = true;
+        activeFound = true;
+      }
+      frag.appendChild(opt);
+    }
+    // Listede yoksa activeModel'i de ekle (kullanıcının kaydedilmiş seçimi kaybolmasın)
+    if (!activeFound && activeModel) {
+      const opt = document.createElement('option');
+      opt.value = activeModel;
+      opt.textContent = activeModel;
+      opt.selected = true;
+      frag.appendChild(opt);
+    }
+    els.openaiModel.replaceChildren(frag);
+  }
+
+  function setModelStatus(messageKey, level) {
+    if (!messageKey) {
+      els.modelStatus.textContent = '';
+      els.modelStatus.className = 'status';
+      return;
+    }
+    els.modelStatus.textContent = I18N.t(messageKey, currentUiLang);
+    els.modelStatus.className = `status ${level || ''}`;
+  }
+
+  // Modelleri yükle: FAZ 4'te background'a FETCH_MODELS mesajı gider. Şimdilik
+  // fallback statik liste kullanılır (popup.html ilk açılış için yeterli).
+  async function loadModels(_forceRefresh = false) {
+    const activeModel = (await Storage.getSettings()).openaiModel;
+    const apiKey = els.apiKey.value.trim();
+
+    if (!apiKey || !apiKey.startsWith('sk-')) {
+      populateModels(C.OPENAI_MODELS_FALLBACK, activeModel);
+      setModelStatus('popup.model.needsKey', 'error');
+      return;
+    }
+
+    populateModels(C.OPENAI_MODELS_FALLBACK, activeModel);
+    setModelStatus(null);
   }
 
   // Ayarları yükle
   const settings = await Storage.getSettings();
+  populateUiLanguage();
+  populateTargetLanguage();
   applySettingsToUI(settings);
+  applyI18n(settings.uiLanguage);
+  await loadModels(false);
   els.apiKey.value = settings.apiKey;
 
+  // refreshApiKeyStatus dinamiktir; apiKey alanına ilk değer atandıktan sonra
+  // status'u doğru göstermek için bir kez daha çağırıyoruz.
+  refreshApiKeyStatus();
   if (settings.apiKey) {
-    els.apiKeyStatus.textContent = 'API key kayıtlı';
+    els.apiKeyStatus.textContent = I18N.t('popup.apiKey.saved', currentUiLang);
     els.apiKeyStatus.className = 'status success';
   }
 
@@ -55,19 +172,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiKeyTimer = setTimeout(async () => {
       const key = els.apiKey.value.trim();
 
-      // Format doğrulama
       if (key && !key.startsWith('sk-')) {
-        els.apiKeyStatus.textContent = 'Geçersiz format - OpenAI key "sk-" ile başlamalı';
+        els.apiKeyStatus.textContent = I18N.t('popup.apiKey.invalidFormat', currentUiLang);
         els.apiKeyStatus.className = 'status error';
         return;
       }
 
       await Storage.setApiKey(key);
       if (key) {
-        els.apiKeyStatus.textContent = 'API key kaydedildi. Aktif videolar için çeviri başlatılıyor...';
+        els.apiKeyStatus.textContent = I18N.t('popup.apiKey.savedActive', currentUiLang);
         els.apiKeyStatus.className = 'status success';
+        // API key girilince modelleri yeniden yükle (FAZ 4 canlı fetch)
+        loadModels(false);
       } else {
-        els.apiKeyStatus.textContent = 'API key gerekli';
+        els.apiKeyStatus.textContent = I18N.t('popup.apiKey.missing', currentUiLang);
         els.apiKeyStatus.className = 'status error';
       }
       broadcastSettingsChange();
@@ -76,23 +194,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Toggle'lar ve ayar değişiklikleri
   els.enableToggle.addEventListener('change', async () => {
-    // Toggle kapatılırsa: eklentiyi chrome://extensions seviyesinde tamamen
-    // devre dışı bırak. Re-enable için kullanıcı chrome://extensions'a gider.
     if (!els.enableToggle.checked) {
       try {
-        // Storage'a yazmıyoruz - böylece re-enable sonrası default 'enabled: true'
-        // devreye girer ve eklenti normal çalışır.
         await chrome.management.setEnabled(chrome.runtime.id, false);
-        // Bu çağrı başarılıysa popup kapanır, aşağısı çalışmaz.
       } catch (e) {
         console.error('Eklenti self-disable başarısız:', e);
-        // Fallback: en azından yumuşak devre dışı (overlay/çeviri durur)
         await Storage.saveSetting('enabled', false);
         broadcastSettingsChange();
       }
       return;
     }
-    // Toggle açıksa (popup zaten eklenti aktifken açılır) - ayarı açık işaretle
     await Storage.saveSetting('enabled', true);
     broadcastSettingsChange();
   });
@@ -142,25 +253,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 300);
   });
 
+  // Dil + model değişiklikleri
+  els.uiLanguage.addEventListener('change', async () => {
+    const code = els.uiLanguage.value;
+    if (!Languages.isSupportedUi(code)) return;
+    await Storage.saveSetting('uiLanguage', code);
+    applyI18n(code);
+    broadcastSettingsChange();
+  });
+
+  els.targetLanguage.addEventListener('change', async () => {
+    const code = els.targetLanguage.value;
+    if (!Languages.isSupportedTarget(code)) return;
+    await Storage.saveSetting('targetLanguage', code);
+    broadcastSettingsChange();
+  });
+
+  els.openaiModel.addEventListener('change', async () => {
+    const model = els.openaiModel.value;
+    if (!model) return;
+    await Storage.saveSetting('openaiModel', model);
+    broadcastSettingsChange();
+  });
+
+  els.refreshModels.addEventListener('click', async () => {
+    setModelStatus('popup.model.loading', '');
+    await loadModels(true);
+  });
+
   // Varsayılana sıfırla (API key hariç)
   els.resetDefaults.addEventListener('click', async () => {
     const { apiKey: _ignored, ...defaults } = Storage.defaults;
     await Storage.saveSettings(defaults);
     applySettingsToUI(defaults);
+    applyI18n(defaults.uiLanguage);
+    await loadModels(false);
     broadcastSettingsChange();
   });
 
   // Cache
-  await updateCacheStats();
+  await refreshCacheStats();
 
   els.clearCache.addEventListener('click', async () => {
     await Storage.clearCache();
-    await updateCacheStats();
+    await refreshCacheStats();
   });
 
-  async function updateCacheStats() {
+  async function refreshCacheStats() {
     const stats = await Storage.getCacheStats();
-    els.cacheStats.textContent = `${stats.count} video önbellekte (${stats.sizeKB} KB)`;
+    els.cacheStats.textContent = I18N.t('popup.cache.stats', currentUiLang, {
+      count: stats.count,
+      sizeKB: stats.sizeKB
+    });
   }
 
   function broadcastSettingsChange() {
