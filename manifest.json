@@ -39,6 +39,7 @@
         "lib/transcript-reader.js",
         "lib/subtitle-renderer.js",
         "lib/navigation-watcher.js",
+        "lib/poll-helper.js",
         "content-player.js",
         "content-laracasts.js"
       ],

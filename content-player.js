@@ -189,7 +189,7 @@
   function findVideo() {
     // Önceki aramayı temizle
     if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
-    if (findVideoInterval) { clearInterval(findVideoInterval); findVideoInterval = null; }
+    if (findVideoInterval) { findVideoInterval.stop(); findVideoInterval = null; }
 
     let attempts = 0;
     const maxAttempts = 30;
@@ -198,7 +198,7 @@
       const result = findVideoElement();
       if (result) {
         if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
-        if (findVideoInterval) { clearInterval(findVideoInterval); findVideoInterval = null; }
+        if (findVideoInterval) { findVideoInterval.stop(); findVideoInterval = null; }
         onVideoFound(result.video, result.container);
         return true;
       }
@@ -229,20 +229,28 @@
       subtree: true
     });
 
-    // Yedek polling (shadow DOM içindeki değişiklikler MutationObserver'a yansımaz)
-    findVideoInterval = setInterval(() => {
+    // Yedek polling (shadow DOM içindeki değişiklikler MutationObserver'a yansımaz).
+    // makePoll: tab gizli iken otomatik pause, visible'da resume (lib/poll-helper).
+    findVideoInterval = makePoll(() => {
       if (currentVideo) {
-        clearInterval(findVideoInterval); findVideoInterval = null;
+        if (findVideoInterval) { findVideoInterval.stop(); findVideoInterval = null; }
         if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
         return;
       }
       if (check()) return;
       if (attempts >= maxAttempts) {
-        clearInterval(findVideoInterval); findVideoInterval = null;
+        if (findVideoInterval) { findVideoInterval.stop(); findVideoInterval = null; }
         if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
         console.log('LCT: Video bulunamadı (timeout)');
       }
     }, 500);
+  }
+
+  // poll-helper.js yüklendiyse createPoll kullan; yoksa basit setInterval adapter.
+  function makePoll(fn, ms) {
+    if (typeof self.createPoll === 'function') return self.createPoll(fn, ms);
+    const id = setInterval(fn, ms);
+    return { stop: () => clearInterval(id), isRunning: () => true };
   }
 
   async function onVideoFound(video, container) {
@@ -303,7 +311,7 @@
     nativeTrackHandle = LCT_NativeHandler ? LCT_NativeHandler.disable(video) : null;
 
     if (!video._lctTrackModeWatcher) {
-      video._lctTrackModeWatcher = setInterval(() => {
+      video._lctTrackModeWatcher = makePoll(() => {
         for (let i = 0; i < video.textTracks.length; i++) {
           const track = video.textTracks[i];
           if ((track.kind === 'captions' || track.kind === 'subtitles') && track.mode === 'disabled') {
@@ -316,7 +324,7 @@
 
   function enableNativeTextTracks(video) {
     if (video && video._lctTrackModeWatcher) {
-      clearInterval(video._lctTrackModeWatcher);
+      video._lctTrackModeWatcher.stop();
       video._lctTrackModeWatcher = null;
     }
     if (LCT_NativeHandler) LCT_NativeHandler.restore(nativeTrackHandle);
@@ -583,7 +591,7 @@
    */
   function cleanupWaitTrack() {
     if (waitTrackObserver) { waitTrackObserver.disconnect(); waitTrackObserver = null; }
-    if (waitTrackInterval) { clearInterval(waitTrackInterval); waitTrackInterval = null; }
+    if (waitTrackInterval) { waitTrackInterval.stop(); waitTrackInterval = null; }
     if (waitTrackVideo && waitTrackHandler) {
       waitTrackVideo.textTracks.removeEventListener('addtrack', waitTrackHandler);
     }
@@ -629,8 +637,8 @@
     };
     video.textTracks.addEventListener('addtrack', waitTrackHandler);
 
-    // 3) Yedek polling - her iki kaynağı da kontrol eder
-    waitTrackInterval = setInterval(() => {
+    // 3) Yedek polling - her iki kaynağı da kontrol eder (visibility-aware).
+    waitTrackInterval = makePoll(() => {
       if (resolved) return;
       trackAttempts++;
 
@@ -1102,7 +1110,7 @@
 
   function watchVideoChanges(video) {
     if (videoObserver) videoObserver.disconnect();
-    if (videoCheckInterval) { clearInterval(videoCheckInterval); videoCheckInterval = null; }
+    if (videoCheckInterval) { videoCheckInterval.stop(); videoCheckInterval = null; }
 
     videoObserver = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -1122,13 +1130,13 @@
     if (currentContainer && currentContainer.tagName === 'MUX-PLAYER') {
       videoObserver.observe(currentContainer, { attributes: true, attributeFilter: ['playback-id'] });
 
-      // Mux Player video element değişimini izle (shadow DOM içerisinde swap olabilir)
-      videoCheckInterval = setInterval(() => {
+      // Mux Player video element değişimini izle (shadow DOM içerisinde swap olabilir).
+      // makePoll: tab gizliyken pause olur, kullanıcı sayfaya dönünce devam.
+      videoCheckInterval = makePoll(() => {
         const actualVideo = currentContainer.media?.nativeEl;
         if (actualVideo && actualVideo !== currentVideo) {
           console.log('LCT: Mux Player video element değişti, yeniden başlatılıyor');
-          clearInterval(videoCheckInterval);
-          videoCheckInterval = null;
+          if (videoCheckInterval) { videoCheckInterval.stop(); videoCheckInterval = null; }
           const prevContainer = currentContainer;
           cleanup();
           setTimeout(() => onVideoFound(actualVideo, prevContainer), 100);
@@ -1142,12 +1150,12 @@
     cleanupWaitTrack();
     // findVideo() observer/interval temizliği
     if (findVideoObserver) { findVideoObserver.disconnect(); findVideoObserver = null; }
-    if (findVideoInterval) { clearInterval(findVideoInterval); findVideoInterval = null; }
+    if (findVideoInterval) { findVideoInterval.stop(); findVideoInterval = null; }
     // Sayfa değişiklik timeout temizliği
     clearTimeout(pageChangeTimeout);
     pageChangeTimeout = null;
     // Mux Player video element swap kontrolü
-    if (videoCheckInterval) { clearInterval(videoCheckInterval); videoCheckInterval = null; }
+    if (videoCheckInterval) { videoCheckInterval.stop(); videoCheckInterval = null; }
     // Aktif çeviri oturumunu iptal et
     if (orchestrator) {
       orchestrator.cancel();
@@ -1186,6 +1194,10 @@
       currentVideo = null;
     }
     if (seekDebounceTimer) { clearTimeout(seekDebounceTimer); seekDebounceTimer = null; }
+    // DeepQuery cache invalidate (shadow DOM host referansları stale olur)
+    if (LCT_DeepQuery && typeof LCT_DeepQuery.invalidate === 'function') {
+      try { LCT_DeepQuery.invalidate(); } catch (_) {}
+    }
     currentContainer = null;
     syncListenerAttached = false;
     statusMessage = null;
