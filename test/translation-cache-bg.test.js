@@ -56,3 +56,42 @@ describe('LCTTranslationCacheBg.evictOldest()', () => {
     expect(after._lct_apiKey_enc).toBe('stays');
   });
 });
+
+describe('LCTTranslationCacheBg langCode parametresi (v0.5.0)', () => {
+  it('get langCode parametresiyle farklı dil cache\'i okur', async () => {
+    await chrome.storage.local.set({
+      'translation_vid_tr': { cues: [{ text: 'a' }], fingerprint: 'f', timestamp: 1 },
+      'translation_vid_de': { cues: [{ text: 'b' }], fingerprint: 'f', timestamp: 1 }
+    });
+    const tr = await LCTTranslationCacheBg.get('vid', 'tr');
+    const de = await LCTTranslationCacheBg.get('vid', 'de');
+    expect(tr.cues[0].text).toBe('a');
+    expect(de.cues[0].text).toBe('b');
+  });
+
+  it('set langCode parametresiyle ayrı anahtar yazar', async () => {
+    await LCTTranslationCacheBg.set('vid', [{ text: 'de-text' }], 'fp', 'de');
+    await LCTTranslationCacheBg.set('vid', [{ text: 'tr-text' }], 'fp', 'tr');
+    const all = await chrome.storage.local.get(null);
+    expect(all['translation_vid_de'].cues[0].text).toBe('de-text');
+    expect(all['translation_vid_tr'].cues[0].text).toBe('tr-text');
+  });
+
+  it('set entry içine langCode alanı koyar', async () => {
+    await LCTTranslationCacheBg.set('vid', [], 'fp', 'fr');
+    const all = await chrome.storage.local.get('translation_vid_fr');
+    expect(all['translation_vid_fr'].langCode).toBe('fr');
+  });
+
+  it('langCode verilmezse tr default', async () => {
+    await LCTTranslationCacheBg.set('vid', [], 'fp');
+    const all = await chrome.storage.local.get('translation_vid_tr');
+    expect(all['translation_vid_tr']).toBeDefined();
+  });
+
+  it('BCP-47 bölgesel kod (zh-CN, pt-BR) doğru saklanır', async () => {
+    await LCTTranslationCacheBg.set('vid', [{ text: 'zh' }], 'fp', 'zh-CN');
+    const fetched = await LCTTranslationCacheBg.get('vid', 'zh-CN');
+    expect(fetched.cues[0].text).toBe('zh');
+  });
+});

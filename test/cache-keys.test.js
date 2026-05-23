@@ -49,3 +49,58 @@ describe('LCTCacheKeys.extractVideoId()', () => {
     expect(LCTCacheKeys.extractVideoId('abc')).toBeNull();
   });
 });
+
+describe('LCTCacheKeys.translation() langCode parametresi', () => {
+  it('langCode verilmezse tr default', () => {
+    expect(LCTCacheKeys.translation('abc')).toBe('translation_abc_tr');
+  });
+
+  it('langCode de -> translation_abc_de', () => {
+    expect(LCTCacheKeys.translation('abc', 'de')).toBe('translation_abc_de');
+  });
+
+  it('BCP-47 bölgesel kod (zh-CN, pt-BR) korunur', () => {
+    expect(LCTCacheKeys.translation('abc', 'zh-CN')).toBe('translation_abc_zh-CN');
+    expect(LCTCacheKeys.translation('abc', 'pt-BR')).toBe('translation_abc_pt-BR');
+  });
+
+  it('geçersiz langCode için tr fallback (kod bozulması engellenir)', () => {
+    expect(LCTCacheKeys.translation('abc', 'XX')).toBe('translation_abc_tr');
+    expect(LCTCacheKeys.translation('abc', '')).toBe('translation_abc_tr');
+    expect(LCTCacheKeys.translation('abc', null)).toBe('translation_abc_tr');
+    expect(LCTCacheKeys.translation('abc', 123)).toBe('translation_abc_tr');
+  });
+});
+
+describe('LCTCacheKeys.isTranslationKey() çoklu dil', () => {
+  it('farklı dil suffix\'lerini tanır', () => {
+    expect(LCTCacheKeys.isTranslationKey('translation_abc_tr')).toBe(true);
+    expect(LCTCacheKeys.isTranslationKey('translation_abc_de')).toBe(true);
+    expect(LCTCacheKeys.isTranslationKey('translation_abc_zh-CN')).toBe(true);
+    expect(LCTCacheKeys.isTranslationKey('translation_mux_xyz_pt-BR')).toBe(true);
+  });
+
+  it('geçersiz langCode formatına sahip anahtarları reddeder', () => {
+    expect(LCTCacheKeys.isTranslationKey('translation_abc_XX')).toBe(false);
+    expect(LCTCacheKeys.isTranslationKey('translation_abc_TUR')).toBe(false);
+    expect(LCTCacheKeys.isTranslationKey('translation_abc_x')).toBe(false);
+  });
+});
+
+describe('LCTCacheKeys.extractLangCode()', () => {
+  it('geçerli anahtardan langCode çıkarır', () => {
+    expect(LCTCacheKeys.extractLangCode('translation_abc_tr')).toBe('tr');
+    expect(LCTCacheKeys.extractLangCode('translation_mux_xyz_de')).toBe('de');
+    expect(LCTCacheKeys.extractLangCode('translation_mux_xyz_zh-CN')).toBe('zh-CN');
+  });
+
+  it('geçersiz anahtar için null', () => {
+    expect(LCTCacheKeys.extractLangCode('abc')).toBeNull();
+    expect(LCTCacheKeys.extractLangCode('translation_abc')).toBeNull();
+  });
+
+  it('roundtrip: translation -> extract aynı kod', () => {
+    expect(LCTCacheKeys.extractLangCode(LCTCacheKeys.translation('foo', 'fr'))).toBe('fr');
+    expect(LCTCacheKeys.extractLangCode(LCTCacheKeys.translation('foo', 'pt-BR'))).toBe('pt-BR');
+  });
+});
