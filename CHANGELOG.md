@@ -3,6 +3,18 @@
 Tüm önemli değişiklikler bu dosyada belgelenir.
 Format [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standardını takip eder ve proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [0.5.3] - 2026-05-23
+
+### Eklendi
+
+- `unlimitedStorage` permission'ı manifest'e eklendi. `chrome.storage.local` 5MB default quota'sı kalkıyor, çevrilen video transkriptleri ve cue tabloları sınırsız diske saklanır.
+- LRU evict mekanizması (`lib/translation-cache-bg.js -> evictOldest`) yerinde duruyor ama artık tetiklenmez — `QUOTA_BYTES` hatası `unlimitedStorage` ile fırlatılmaz. Defensive olarak fallback kodu korunuyor (permission yokken eski davranış).
+
+### Notlar
+
+- Tüm geçmiş çeviriler sonsuza dek sürer (manuel "Önbelleği Temizle" butonu hâlâ çalışır).
+- Chrome eklentiyi yüklerken "Bu eklentinin sınırsız depolama erişimi var" uyarısı gösterecektir.
+
 ## [0.5.2] - 2026-05-23
 
 v0.5.1'den sonra Laracasts video player'da hâlâ takılma raporları geldi. Bu sürüm hot-path'teki kalan dört sebebe odaklanır.

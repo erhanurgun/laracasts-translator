@@ -2,9 +2,10 @@
   "manifest_version": 3,
   "name": "Laracasts Translator",
   "description": "Laracasts videolarında İngilizce altyazıları istediğiniz dile çeviren Chrome eklentisi (25 BCP-47 dil, dinamik OpenAI model seçimi)",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "alarms",
     "management"
   ],
