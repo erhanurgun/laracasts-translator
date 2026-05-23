@@ -310,6 +310,10 @@
     // chunk'lar inmeye devam eder, addcue listener yeni cue'ları yakalar.
     nativeTrackHandle = LCT_NativeHandler ? LCT_NativeHandler.disable(video) : null;
 
+    // Track mode watchdog: 'disabled' moduna düşen captions track'lerini
+    // 'hidden' yap (Mux HLS chunk indirmenin devam etmesi için). 15sn'den
+    // 60sn'ye çıkarıldı + tab gizliyken pause olur. Polling frekansı
+    // Mux Player UI thread'iyle çakışmaz.
     if (!video._lctTrackModeWatcher) {
       video._lctTrackModeWatcher = makePoll(() => {
         for (let i = 0; i < video.textTracks.length; i++) {
@@ -318,7 +322,7 @@
             track.mode = 'hidden';
           }
         }
-      }, 15000);
+      }, 60000);
     }
   }
 
@@ -466,6 +470,9 @@
     // sırasında cleanup() içinde removeEventListener ile sökülebilmesi.
     if (!targetTrack._lctBound) {
       targetTrack._lctBound = true;
+      // addcue handler: HLS chunk akışında hızlı tetiklenir. Sort O(n log n)
+      // her chunk'ta yapmak yerine debounce window'unun sonunda tek sefer
+      // yapılır. Hot path push-only, video oynatma main thread'i blokesiz.
       const onAddCueHandler = (e) => {
         const rawCue = e.cue;
         const newCues = splitLongCue({
@@ -475,14 +482,23 @@
           text: rawCue.text
         });
 
+        // Hızlı tekrar kontrolü: sıralı array'de aynı startTime aramak için
+        // son 32 cue'ya bak (HLS chunk'lar zamansal sıralı gelir, eski cue
+        // tekrar gelme ihtimali düşük).
         let hasNew = false;
+        const recentStart = Math.max(0, currentCues.length - 32);
         for (const sc of newCues) {
-          // Süre toleransı 0.1sn + metin eşleşmesi: aynı cue'nun mükerrer eklenmesini önler
-          const exists = currentCues.some(c => Math.abs(c.startTime - sc.startTime) < 0.1 && c.text === sc.text);
-          if (!exists) {
+          let dup = false;
+          for (let i = recentStart; i < currentCues.length; i++) {
+            const c = currentCues[i];
+            if (Math.abs(c.startTime - sc.startTime) < 0.1 && c.text === sc.text) {
+              dup = true;
+              break;
+            }
+          }
+          if (!dup) {
             parsedOriginalCues.push(sc);
             currentCues.push({ ...sc, translation: '' });
-
             if (!window._lctPendingStreamCues) window._lctPendingStreamCues = [];
             window._lctPendingStreamCues.push(sc);
             hasNew = true;
@@ -490,13 +506,12 @@
         }
 
         if (hasNew) {
-          // Sıralı tutulmasının sebebi: findActiveCue binary search ile match yapıyor
-          parsedOriginalCues.sort((a, b) => a.startTime - b.startTime);
-          currentCues.sort((a, b) => a.startTime - b.startTime);
-
           clearTimeout(window._lctStreamDebounce);
-          // 3 saniye sessizlik sonrası birikmiş chunk'ları toplu çeviriye yolla
+          // 3 saniye sessizlik sonrası birikmiş chunk'ları sırala + toplu çeviriye yolla
           window._lctStreamDebounce = setTimeout(() => {
+            // Sort'u burada tek sefer yap (hot path'te değil)
+            parsedOriginalCues.sort((a, b) => a.startTime - b.startTime);
+            currentCues.sort((a, b) => a.startTime - b.startTime);
             if (window._lctPendingStreamCues && window._lctPendingStreamCues.length > 0) {
               const queue = window._lctPendingStreamCues;
               window._lctPendingStreamCues = [];
@@ -797,6 +812,7 @@
         if (cached.fingerprint === fingerprint) {
           console.log('LCT: Cache hit: çeviriler önbellekten yükleniyor');
           currentCues = cached.cues;
+          markPartialTranslation();
           translationState = 'done';
           showMessage('Önbellekten yüklendi');
           setTimeout(() => { if (translationState === 'done') showMessage(''); }, 2000);
@@ -836,13 +852,16 @@
         }
       },
       onBatchResult: ({ startIndex, cues: batchCues }) => {
+        let applied = 0;
         for (let i = 0; i < batchCues.length; i++) {
           const tc = batchCues[i];
           const memIndex = currentCues.findIndex(c => Math.abs(c.startTime - tc.startTime) < 0.1 && c.text === tc.text);
           if (memIndex !== -1 && tc.translation) {
             currentCues[memIndex].translation = tc.translation;
+            applied++;
           }
         }
+        if (applied > 0) markPartialTranslation();
         console.log(`LCT: Batch ${Math.floor(startIndex / 50) + 1} uygulandı (index ${startIndex}-${startIndex + batchCues.length - 1})`);
         statusMessage = null;
       },
@@ -917,13 +936,16 @@
       onProgress: () => {},
       onBatchResult: ({ startIndex, cues: batchCues }) => {
         // Yeni çevrilen veriyi global currentCues listesinde yerine yamala
+        let applied = 0;
         for (let i = 0; i < batchCues.length; i++) {
           const tc = batchCues[i];
           const memIndex = currentCues.findIndex(c => Math.abs(c.startTime - tc.startTime) < 0.1 && c.text === tc.text);
           if (memIndex !== -1 && tc.translation) {
             currentCues[memIndex].translation = tc.translation;
+            applied++;
           }
         }
+        if (applied > 0) markPartialTranslation();
       },
       onComplete: (finalCues) => {
         console.log(`LCT: Ekstra streaming çeviri parçası tamamlandı. (${finalCues.length} satır)`);
@@ -1022,25 +1044,50 @@
     }, 300);
   }
 
+  // timeupdate Mux Player'da 60Hz tetiklenir; render frekansını VSYNC'e
+  // çekmek için RAF coalescing. Aynı RAF tick'inde gelen birden çok
+  // timeupdate tek render'a düşer. Frame rate ~60 fps yerine renderer'ın
+  // gerçek ihtiyacı ~4-16Hz (cue 2-5sn aktif).
+  let rafScheduled = false;
+  let timeUpdateRafToken = null;
+  function scheduleTimeUpdate() {
+    if (rafScheduled || !currentVideo || !renderer || !isEnabled) return;
+    rafScheduled = true;
+    timeUpdateRafToken = requestAnimationFrame(() => {
+      rafScheduled = false;
+      timeUpdateRafToken = null;
+      renderTick();
+    });
+  }
+
+  function cancelScheduledTimeUpdate() {
+    if (timeUpdateRafToken !== null) {
+      cancelAnimationFrame(timeUpdateRafToken);
+      timeUpdateRafToken = null;
+    }
+    rafScheduled = false;
+  }
+
   function startSync() {
     if (!currentVideo) return;
     // Defensive: eski listener'ı kaldır (memory leak koruması).
     // SPA navigasyonda currentVideo referansı değişse bile handler temiz kalır.
-    currentVideo.removeEventListener('timeupdate', onTimeUpdate);
-    currentVideo.addEventListener('timeupdate', onTimeUpdate);
+    currentVideo.removeEventListener('timeupdate', scheduleTimeUpdate);
+    currentVideo.addEventListener('timeupdate', scheduleTimeUpdate, { passive: true });
     currentVideo.removeEventListener('seeking', onSeeking);
-    currentVideo.addEventListener('seeking', onSeeking);
+    currentVideo.addEventListener('seeking', onSeeking, { passive: true });
     syncListenerAttached = true;
   }
 
-  function onTimeUpdate() {
+  // Render hot path. RAF batched, çağrılma frekansı render rate'le sınırlı.
+  function renderTick() {
     if (!currentVideo || !renderer || !isEnabled) return;
 
     const time = currentVideo.currentTime;
     const activeCue = findActiveCue(time);
 
     // Progresif çeviri: ilk batch geldikten sonra normal altyazı + boşluklarda ilerleme
-    if (translationState === 'translating' && hasPartialTranslation()) {
+    if (translationState === 'translating' && hasPartialTranslationFlag) {
       if (activeCue) {
         renderer.update(
           settings.showOriginal ? activeCue.text : '',
@@ -1072,9 +1119,13 @@
     }
   }
 
-  function hasPartialTranslation() {
-    return currentCues.some(c => c.translation !== '');
-  }
+  // hasPartialTranslation O(1) flag: her timeupdate'te O(n) scan etmek
+  // yerine batch geldiğinde set ederiz, cleanup'ta sıfırlanır.
+  let hasPartialTranslationFlag = false;
+  function markPartialTranslation() { hasPartialTranslationFlag = true; }
+  function clearPartialTranslation() { hasPartialTranslationFlag = false; }
+  // Legacy okuma yolu (testler veya başka modüller için)
+  function hasPartialTranslation() { return hasPartialTranslationFlag; }
 
   function findActiveCue(time) {
     return LCT_CueSearch ? LCT_CueSearch.findActive(currentCues, time) : null;
@@ -1112,26 +1163,27 @@
     if (videoObserver) videoObserver.disconnect();
     if (videoCheckInterval) { videoCheckInterval.stop(); videoCheckInterval = null; }
 
-    videoObserver = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === 'attributes' &&
-            (mutation.attributeName === 'src' || mutation.attributeName === 'playback-id')) {
-          console.log(`LCT: ${mutation.attributeName} değişti, yeniden başlatılıyor`);
-          const prevContainer = currentContainer;
-          cleanup();
-          setTimeout(() => onVideoFound(video, prevContainer), 500);
-          return;
-        }
-      }
-    });
-
-    videoObserver.observe(video, { attributes: true, attributeFilter: ['src'] });
-
+    // SADECE Mux Player playback-id'sini izle. Video element'in src
+    // attribute'unu izlemiyoruz çünkü Mux Player kendi HLS manifest'i için
+    // src'yi blob: URL'leriyle sık günceller; bizim observer'ımızı her
+    // güncelleme tetikliyor ve cleanup+restart loop'u açıyordu.
+    // SPA navigasyon zaten createNavigationWatcher tarafından yakalanıyor.
     if (currentContainer && currentContainer.tagName === 'MUX-PLAYER') {
+      videoObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.type === 'attributes' && mutation.attributeName === 'playback-id') {
+            console.log('LCT: playback-id değişti, yeniden başlatılıyor');
+            const prevContainer = currentContainer;
+            cleanup();
+            setTimeout(() => onVideoFound(video, prevContainer), 500);
+            return;
+          }
+        }
+      });
       videoObserver.observe(currentContainer, { attributes: true, attributeFilter: ['playback-id'] });
 
-      // Mux Player video element değişimini izle (shadow DOM içerisinde swap olabilir).
-      // makePoll: tab gizliyken pause olur, kullanıcı sayfaya dönünce devam.
+      // Mux Player video element swap'ı (shadow DOM içinde). 1sn polling,
+      // tab gizliyken pause (createPoll).
       videoCheckInterval = makePoll(() => {
         const actualVideo = currentContainer.media?.nativeEl;
         if (actualVideo && actualVideo !== currentVideo) {
@@ -1143,6 +1195,9 @@
         }
       }, 1000);
     }
+    // Native <video> (Mux dışı): src değişimi çok nadirdir ve SPA
+    // navigasyonda zaten cleanup+restart loop'u akıyor. Ek observer
+    // gereksiz.
   }
 
   function cleanup() {
@@ -1189,10 +1244,12 @@
       }
       enableNativeTextTracks(currentVideo);
       showCCButton();
-      currentVideo.removeEventListener('timeupdate', onTimeUpdate);
+      currentVideo.removeEventListener('timeupdate', scheduleTimeUpdate);
       currentVideo.removeEventListener('seeking', onSeeking);
       currentVideo = null;
     }
+    cancelScheduledTimeUpdate();
+    clearPartialTranslation();
     if (seekDebounceTimer) { clearTimeout(seekDebounceTimer); seekDebounceTimer = null; }
     // DeepQuery cache invalidate (shadow DOM host referansları stale olur)
     if (LCT_DeepQuery && typeof LCT_DeepQuery.invalidate === 'function') {

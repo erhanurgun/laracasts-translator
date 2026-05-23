@@ -3,6 +3,26 @@
 Tüm önemli değişiklikler bu dosyada belgelenir.
 Format [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standardını takip eder ve proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [0.5.2] - 2026-05-23
+
+v0.5.1'den sonra Laracasts video player'da hâlâ takılma raporları geldi. Bu sürüm hot-path'teki kalan dört sebebe odaklanır.
+
+### Düzeltildi
+
+- `timeupdate` event'i Mux Player'da 60Hz tetikleniyordu; `onTimeUpdate` her tick'te `hasPartialTranslation()` ile O(n) cue scan yapıyordu. `requestAnimationFrame` coalescing eklendi (`scheduleTimeUpdate`/`renderTick`), tek frame'de gelen birden çok timeupdate tek render'a düşer. `hasPartialTranslation()` O(n) yerine O(1) bayrak (`hasPartialTranslationFlag`) okur; cache hit, batch result ve chunk result'larda set edilir, cleanup'ta sıfırlanır.
+- `addcue` handler her HLS chunk'ta `parsedOriginalCues.sort` + `currentCues.sort` O(n log n) çağırıyordu (n: 500-1500). Sort'lar stream debounce window'unun sonuna (3sn) taşındı, hot path push-only oldu. Tekrar kontrolü full scan yerine son 32 cue'ya sınırlandı (HLS chunk'lar zamansal sıralı gelir).
+- `videoObserver` `video.src` attribute'unu izliyordu; Mux Player kendi HLS manifest yönetiminde `src`'yi blob URL'leriyle sürekli güncelleyip cleanup+restart loop'u tetikliyordu. `src` izleme kaldırıldı, sadece Mux container `playback-id` izleniyor. SPA navigasyon zaten `lib/navigation-watcher.js` ile yakalanıyor.
+- `_lctTrackModeWatcher` polling periyodu 15sn → 60sn'ye çıkarıldı. `'disabled'` → `'hidden'` mode change Mux HLS chunk fetcher'ını yeniden başlatabiliyordu; daha seyrek tetiklenme HLS akışını kesintisiz tutar. createPoll wrapper'ı tab gizliyken zaten pause eder.
+
+### Değişti
+
+- `currentVideo.addEventListener('timeupdate', ..., { passive: true })` ve `'seeking'` aynı şekilde passive. Browser scheduler'ı listener'ları daha erken yield edebilir.
+- Cleanup'ta `cancelScheduledTimeUpdate()` + `clearPartialTranslation()` çağrıları (yetim RAF token + stale bayrak temizliği).
+
+### Migration
+
+- API yüzeyi değişmedi. v0.5.1 testleri yeşil (295/295).
+
 ## [0.5.1] - 2026-05-23
 
 Laracasts video player'da ileri/geri sarma, oynat/duraklat sırasında yaşanan kasma sorununu hedefleyen performans paketi. API yüzeyi değişmedi.
