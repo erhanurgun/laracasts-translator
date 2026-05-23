@@ -5,7 +5,7 @@
 }
 
 body {
-  width: 440px;
+  width: 520px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 12.5px;
   color: #e0e0e0;
@@ -340,12 +340,15 @@ body {
   color: #ffffff;
 }
 
+/* Tooltip: help-icon'un sağ kenarına yaslı, sola doğru büyür.
+   Popup'ın sağ tarafına yakın iconlar için tooltip içeride kalır. */
 .help-icon::after {
   content: attr(data-tooltip);
   position: absolute;
   bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  right: -4px;
+  left: auto;
+  transform: none;
   background: #16213e;
   color: #e0e0e0;
   padding: 6px 10px;
@@ -356,7 +359,7 @@ body {
   line-height: 1.35;
   white-space: normal;
   width: max-content;
-  max-width: 220px;
+  max-width: 280px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease;

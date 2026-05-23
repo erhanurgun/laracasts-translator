@@ -56,11 +56,30 @@ describe('LCTModelFetch.filterModels()', () => {
     expect(result).toEqual(['gpt-4o']);
   });
 
-  it('sıralı döner', () => {
+  it('created yokken alfabetik sıralı döner (fallback)', () => {
     const result = LCTModelFetch.filterModels([
       { id: 'gpt-4o-mini' },
       { id: 'gpt-3.5-turbo' },
       { id: 'gpt-4o' }
+    ]);
+    expect(result).toEqual(['gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini']);
+  });
+
+  it('created DESC sıralar (en son çıkan üstte)', () => {
+    const result = LCTModelFetch.filterModels([
+      { id: 'gpt-3.5-turbo', created: 1000 },
+      { id: 'gpt-4o', created: 3000 },
+      { id: 'gpt-4o-mini', created: 2000 },
+      { id: 'gpt-4.1', created: 4000 }
+    ]);
+    expect(result).toEqual(['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo']);
+  });
+
+  it('created eşitse alfabetik fallback', () => {
+    const result = LCTModelFetch.filterModels([
+      { id: 'gpt-4o-mini', created: 1000 },
+      { id: 'gpt-4o', created: 1000 },
+      { id: 'gpt-3.5-turbo', created: 1000 }
     ]);
     expect(result).toEqual(['gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini']);
   });
