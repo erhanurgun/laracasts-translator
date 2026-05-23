@@ -45,4 +45,36 @@ describe('LCTConstants', () => {
   it('storage key legacy _lct_apiKey olmalı', () => {
     expect(LCTConstants.STORAGE_KEY_LEGACY_API).toBe('_lct_apiKey');
   });
+
+  // v0.5.0: çoklu dil + dinamik model
+  it('DEFAULT_SETTINGS uiLanguage tr olmalı', () => {
+    expect(LCTConstants.DEFAULT_SETTINGS.uiLanguage).toBe('tr');
+  });
+
+  it('DEFAULT_SETTINGS targetLanguage tr olmalı', () => {
+    expect(LCTConstants.DEFAULT_SETTINGS.targetLanguage).toBe('tr');
+  });
+
+  it('DEFAULT_SETTINGS openaiModel gpt-4o olmalı', () => {
+    expect(LCTConstants.DEFAULT_SETTINGS.openaiModel).toBe('gpt-4o');
+  });
+
+  it('OPENAI_MODELS_ENDPOINT /v1/models adresi olmalı', () => {
+    expect(LCTConstants.OPENAI_MODELS_ENDPOINT).toBe('https://api.openai.com/v1/models');
+  });
+
+  it('OPENAI_MODELS_FALLBACK en az 4 model içermeli ve frozen olmalı', () => {
+    expect(Array.isArray(LCTConstants.OPENAI_MODELS_FALLBACK)).toBe(true);
+    expect(LCTConstants.OPENAI_MODELS_FALLBACK.length).toBeGreaterThanOrEqual(4);
+    expect(Object.isFrozen(LCTConstants.OPENAI_MODELS_FALLBACK)).toBe(true);
+    expect(LCTConstants.OPENAI_MODELS_FALLBACK).toContain('gpt-4o');
+  });
+
+  it('MODELS_CACHE_TTL_MS 24 saat olmalı', () => {
+    expect(LCTConstants.MODELS_CACHE_TTL_MS).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it('STORAGE_KEY_MODELS_CACHE _lct_models_cache olmalı', () => {
+    expect(LCTConstants.STORAGE_KEY_MODELS_CACHE).toBe('_lct_models_cache');
+  });
 });
