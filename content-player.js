@@ -1221,6 +1221,8 @@
     // Debounce: birden fazla storage key aynı anda değişebilir
     clearTimeout(settingsChangeDebounce);
     settingsChangeDebounce = setTimeout(async () => {
+      const prevTargetLang = settings && settings.targetLanguage;
+      const prevModel = settings && settings.openaiModel;
       settings = await getSettings();
       const wasEnabled = isEnabled;
       isEnabled = settings.enabled;
@@ -1238,6 +1240,16 @@
       // Stil güncelle (minimal DTO ile)
       if (renderer) {
         renderer.updateStyle(toRendererStyle(settings));
+      }
+
+      // Hedef dil veya model değişti: aktif çeviriyi yenile.
+      // Yeni dil/model için ya cache'te yeni varyant olur ya da fetch tetiklenir.
+      const targetLangChanged = prevTargetLang && prevTargetLang !== settings.targetLanguage;
+      const modelChanged = prevModel && prevModel !== settings.openaiModel;
+      if ((targetLangChanged || modelChanged) && settings.hasApiKey && parsedOriginalCues.length > 0) {
+        console.log(`LCT: Çeviri ayarı değişti (dil:${prevTargetLang}->${settings.targetLanguage}, model:${prevModel}->${settings.openaiModel}), yeniden çeviri tetikleniyor`);
+        triggerTranslation();
+        return;
       }
 
       // API key eklendiyse ve çeviri beklemedeyse → çeviriyi tetikle
