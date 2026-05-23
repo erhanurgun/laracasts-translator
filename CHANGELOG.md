@@ -3,6 +3,38 @@
 Tüm önemli değişiklikler bu dosyada belgelenir.
 Format [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standardını takip eder ve proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [0.5.1] - 2026-05-23
+
+Laracasts video player'da ileri/geri sarma, oynat/duraklat sırasında yaşanan kasma sorununu hedefleyen performans paketi. API yüzeyi değişmedi.
+
+### Düzeltildi
+
+- Mux Player progress bar mutation'larının `document.body subtree:true` MutationObserver'larında saniyede 20-50 callback üretip ana iş parçacığını blokladığı sorun: `lib/navigation-watcher.js` ile Navigation API + `history.pushState/replaceState` patch + `popstate` tabanlı hafif izleyiciye geçildi. URL değişimi `lct:nav` CustomEvent ile yayınlanır.
+- `content-laracasts.js` ile `content-player.js` arasındaki duplikat MutationObserver + pushState patch çakışması; tek kaynak (`content-player.js`) URL değişimini bildirir.
+- Subtitle renderer'ın her `timeupdate` event'inde (4-66Hz) aynı metin için `textContent` yazıp reflow tetiklediği sorun: `lib/subtitle-renderer.js` `update()` ve `applyStyle()` no-op guard'larıyla aynı değer için DOM write atlar.
+- Rapid seek sırasında stream chunk orchestrator'larının 2 saniyelik exponential backoff retry kuyruğunda yığılmasını engellemek için chunk'lara `maxRetries: 0`; `seeking` event'inde 300ms debounce ile `cancelStaleChunks()` çağrılır.
+- Shadow DOM BFS'lerinin polling sırasında her tick'te tekrar koşmasını engellemek için `lib/deep-query-selector.js` host bazlı TTL 1.5 saniye cache + `isConnected` validation eklendi; `invalidate(host)` API'siyle SPA navigasyonda stale referanslar temizlenir.
+
+### Eklendi
+
+- `lib/navigation-watcher.js`: SPA navigasyon izleyici (Navigation API + history patch + popstate).
+- `lib/poll-helper.js`: `createPoll(fn, ms, options)` visibility-aware setInterval wrapper'ı. Tab gizliyken otomatik pause, visible olunca resume; arka plan sekmelerde CPU yakımı sıfırlanır.
+- `content-player.js`'in 4 setInterval'i (`findVideoInterval`, `_lctTrackModeWatcher`, `waitTrackInterval`, `videoCheckInterval`) `createPoll`'a çevrildi.
+- CSS: `#lct-subtitle-original.lct-blur` üzerine `will-change: filter` ve `transform: translateZ(0)` ile blur kendi compositing layer'ında koşar; `@media (prefers-reduced-motion: reduce)` ile geçişler kapatılır.
+- 34 yeni birim test (renderer 11, navigation-watcher 9, poll-helper 8, deep-query cache 6) → toplam 295 yeşil.
+- `docs/UAT-PERFORMANCE.md`: 5 manuel doğrulama senaryosu.
+
+### Değişti
+
+- `LCT_DeepQuery.find()` imzası aynı; cache ile saydam hızlandırma. `invalidate(host)`, `setTtl(ms)`, `getTtl()` yeni public methodlar.
+- `content-player.js` `findVideoObserver` scope `document.body subtree:true`'dan `mux-player / [class*="video-player"] / main` öncelikli scope'a daraltıldı; ardışık mutation'lar `requestAnimationFrame` ile coalesce edilir.
+
+### Migration
+
+- API yüzeyi değişmediği için tüketici kod (renderer factory, orchestrator factory) etkilenmez.
+- v0.4.x ve v0.5.0 storage anahtarları (`_lct_apiKey_enc`, `translation_<id>_<langCode>`) korunur.
+- `host_permissions` değişmedi.
+
 ## [0.5.0] - 2026-05-23
 
 Çoklu dil ve dinamik model desteğine geçiş. v0.4.x kullanıcıları için backward-compatible.
