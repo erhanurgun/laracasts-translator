@@ -52,16 +52,31 @@
 
 /* Orijinal (kaynak dil) bulanıklaştırma - öğrenme modu.
    Kullanıcı önce kendi anlamaya/tahmin etmeye çalışır; gerekirse fare
-   ile orijinal metnin üzerine gelip netleştirir. Çeviri daima nettir. */
+   ile orijinal metnin üzerine gelip netleştirir. Çeviri daima nettir.
+
+   will-change + translateZ: blur kendi compositing layer'ına çekilir,
+   her metin değişiminde parent ağacı reflow/repaint olmaz; transition
+   GPU'da koşulur, main-thread'i bloklamaz. */
 #lct-subtitle-original.lct-blur {
   filter: blur(0.3em);
-  transition: filter 0.18s ease;
+  transition: filter 0.15s ease;
+  will-change: filter;
+  transform: translateZ(0);
   pointer-events: auto;
   cursor: pointer;
 }
 
 #lct-subtitle-original.lct-blur:hover {
   filter: blur(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #lct-subtitle-original.lct-blur {
+    transition: none;
+  }
+  #lct-subtitle-container {
+    transition: none;
+  }
 }
 
 /* Fullscreen'de daha büyük */
