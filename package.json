@@ -1,7 +1,7 @@
 {
   "name": "laracasts-translator",
-  "version": "0.4.2",
-  "description": "Laracasts videolarında İngilizce altyazıları Türkçeye çeviren Chrome eklentisi (geliştirme scriptleri)",
+  "version": "0.5.0",
+  "description": "Laracasts videolarında İngilizce altyazıları istediğiniz dile çeviren Chrome eklentisi - 25 hedef dil, dinamik model seçimi, çoklu arayüz dili",
   "private": true,
   "scripts": {
     "test": "vitest run",

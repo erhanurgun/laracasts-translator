@@ -5,16 +5,17 @@
 <h1 align="center">Laracasts Translator</h1>
 
 <p align="center">
-  Laracasts video derslerindeki İngilizce altyazıları gerçek zamanlı olarak Türkçeye çeviren Chrome eklentisi.
+  Laracasts video derslerindeki İngilizce altyazıları gerçek zamanlı olarak istediğiniz dile çeviren Chrome eklentisi. Türkçe varsayılan, 25 BCP-47 dil seçeneği.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Sürüm-0.4.2-blue" alt="Sürüm">
+  <img src="https://img.shields.io/badge/Sürüm-0.5.0-blue" alt="Sürüm">
   <img src="https://img.shields.io/badge/Lisans-MIT-green" alt="Lisans">
   <img src="https://img.shields.io/badge/Chrome-v116%2B-yellow" alt="Chrome">
   <img src="https://img.shields.io/badge/Manifest-v3-orange" alt="Manifest V3">
   <img src="https://img.shields.io/badge/API-OpenAI-red" alt="API">
-  <img src="https://img.shields.io/badge/Model-GPT--4o-purple" alt="Model">
+  <img src="https://img.shields.io/badge/Model-Seçilebilir-purple" alt="Model">
+  <img src="https://img.shields.io/badge/Diller-25_BCP--47-teal" alt="Diller">
 </p>
 
 ---
@@ -59,8 +60,14 @@ API key, altyazı görünümü, renkler, yazı boyutu, öğrenme modu ve önbell
 
 ## Özellikler
 
-- **Gerçek zamanlı çeviri** - Video oynatılırken altyazılar anında Türkçeye çevrilir (çeviri tamamlandıkça)
-- **Çift altyazı gösterimi** - Orijinal (İngilizce) ve çeviri (Türkçe) aynı anda ekranda
+- **Gerçek zamanlı çeviri** - Video oynatılırken altyazılar anında hedef dile çevrilir (çeviri tamamlandıkça)
+- **Çoklu hedef dil** - 25 BCP-47 dil arasından seçim: Türkçe (varsayılan), İngilizce, Almanca, Fransızca,
+  İspanyolca, İtalyanca, Portekizce (BR/PT), Japonca, Korece, Çince (Basit/Geleneksel), Arapça, Rusça,
+  Felemenkçe, Lehçe, İsveççe, Danca, Norveççe, Fince, Çekçe, Ukraynaca, Hintçe, Endonezce, Vietnamca
+- **Çoklu arayüz dili** - Popup TR/EN arasında anlık değiştirilir, tüm metinler i18n bundle'ından gelir
+- **Dinamik model seçimi** - OpenAI `/v1/models` endpoint'inden mevcut modeller (gpt-4o, gpt-4o-mini,
+  o1, o3, o4-mini, gpt-5.x vb.) çekilir; popup'tan tek tıkla yenilenir, 24 saat cache'lenir
+- **Çift altyazı gösterimi** - Orijinal (İngilizce) ve çeviri (seçili dil) aynı anda ekranda
 - **Öğrenme modu (bulanıklaştırma)** - Orijinal altyazı bulanık görünür, fare üzerine gelince netleşir; önce anlamaya
   odaklanıp sonra İngilizce metni kontrol etmeyi kolaylaştırır
 - **Batch çeviri** - Altyazılar 50'lik gruplar halinde verimli şekilde çevrilir
@@ -142,10 +149,13 @@ Popup menüsünden aşağıdaki ayarlar değiştirilebilir:
 | Ayar                        | Varsayılan        | Açıklama                                                         |
 |-----------------------------|-------------------|------------------------------------------------------------------|
 | **Eklenti durumu**          | Açık              | Çeviriyi etkinleştir/devre dışı bırak                            |
+| **Arayüz dili**             | Türkçe            | Popup metinleri TR/EN arasında değiştirilebilir, anlık uygulanır |
+| **Çeviri hedef dili**       | Türkçe            | 25 BCP-47 dil seçeneği (de, es, fr, ja, ko, zh-CN, ar vb.)       |
+| **OpenAI modeli**           | gpt-4o            | API'den çekilen aktif modeller; yenile butonu cache'i atlatır    |
 | **Orijinal altyazı**        | Açık              | İngilizce altyazıyı göster/gizle                                 |
-| **Çeviri altyazısı**        | Açık              | Türkçe altyazıyı göster/gizle                                    |
+| **Çeviri altyazısı**        | Açık              | Çeviri altyazıyı göster/gizle                                    |
 | **Orijinali bulanıklaştır** | Kapalı            | Öğrenme modu: İngilizce metin bulanık, fare üzerine gelince net  |
-| **Yazı boyutu**             | 25px              | 18px – 45px arası ayarlanabilir                                  |
+| **Yazı boyutu**             | 25px              | 18px - 45px arası ayarlanabilir                                  |
 | **Orijinal renk**           | `#ffffff` (beyaz) | Orijinal altyazı metin rengi                                     |
 | **Çeviri renk**             | `#ffd700` (altın) | Çeviri altyazı metin rengi                                       |
 | **Arka plan opaklığı**      | %75               | Altyazı arka planının saydamlığı                                 |
@@ -165,7 +175,10 @@ laracasts-translator/
 ├── popup.html / js / css              # Popup ayarlar arayüzü
 ├── lib/                               # İzole edilmiş sorumluluk modülleri (SRP)
 │   ├── constants.js                   # Tüm modüllerin okuduğu tek kaynak sabitler
-│   ├── cache-keys.js                  # Çeviri cache anahtar şeması (translation_<videoId>_tr)
+│   ├── cache-keys.js                  # Çeviri cache anahtar şeması (translation_<videoId>_<langCode>)
+│   ├── languages.js                   # 25 BCP-47 hedef dil + TR/EN UI dilleri registry'si
+│   ├── i18n.js                        # Popup TR/EN mesaj bundle'ı + applyTo DOM helper'ı
+│   ├── model-fetch.js                 # OpenAI /v1/models cache'li fetch + fallback liste
 │   ├── fingerprint.js                 # VTT içeriğinden cache doğrulama fingerprint'i
 │   ├── crypto-vault.js                # AES-GCM ile API key şifreleme kasası
 │   ├── origin-guard.js                # postMessage + chrome.runtime origin doğrulama
@@ -173,7 +186,7 @@ laracasts-translator/
 │   ├── prompt-sanitizer.js            # OpenAI prompt injection savunması (role-swap, ChatML)
 │   ├── storage.js                     # Popup tarafı Chrome Storage wrapper
 │   ├── settings-bg.js                 # Service worker tarafı Settings + API key yönetimi
-│   ├── translation-cache-bg.js        # Service worker tarafı çeviri cache (LRU evict)
+│   ├── translation-cache-bg.js        # Service worker tarafı çeviri cache (LRU evict, langCode bazlı)
 │   ├── vtt-parser.js                  # WebVTT parser (dual-export) → {id, startTime, endTime, text}
 │   ├── cue-splitter.js                # Uzun cue'ları doğal break noktalarından bölen splitter
 │   ├── sentence-splitter.js           # Inertia paragraf cue'larını cümle sınırlarından böler
@@ -196,9 +209,10 @@ laracasts-translator/
 VTT URL (track element)
   → fetch & parse → cue dizisi
   → 50'lik batch'lere böl
-  → her batch için OpenAI API çağrısı (gpt-4o, temperature: 0)
+  → her batch için OpenAI API çağrısı (settings.openaiModel, temperature: 0)
+  → system prompt dinamik: "Translate ... into {targetLanguageName}"
   → numaralı satır eşleştirmesiyle map'le
-  → cache'e fingerprint ile kaydet
+  → cache'e fingerprint + langCode ile kaydet (translation_<videoId>_<langCode>)
   → port üzerinden batch sonuçlarını anında gönder
 ```
 
