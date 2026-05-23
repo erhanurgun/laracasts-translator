@@ -903,7 +903,9 @@
     const chunkId = baseVideoId + '_chunk_' + Math.floor(queueCues[0].startTime);
 
     const chunkOrch = LCT_Orchestrator.create({
-      maxRetries: 2,
+      // Chunk'lar opportunistic; başarısız olursa retry yapmaz, böylece rapid seek
+      // sırasında pending retry kuyruğunda yığılma olmaz.
+      maxRetries: 0,
       onProgress: () => {},
       onBatchResult: ({ startIndex, cues: batchCues }) => {
         // Yeni çevrilen veriyi global currentCues listesinde yerine yamala
@@ -987,12 +989,39 @@
 
   // --- Senkronizasyon ---
 
+  // Rapid seek sırasında pending chunk orchestrator + stream debounce queue
+  // iptal edilir. Yeni cue pozisyonu için yeni chunk tetiklenir.
+  function cancelStaleChunks() {
+    if (activeChunkOrchestrators && activeChunkOrchestrators.length > 0) {
+      activeChunkOrchestrators.forEach(orch => {
+        try { orch.cancel(); } catch (_) {}
+      });
+      activeChunkOrchestrators = [];
+    }
+    if (window._lctStreamDebounce) {
+      clearTimeout(window._lctStreamDebounce);
+      window._lctStreamDebounce = null;
+    }
+    window._lctPendingStreamCues = null;
+  }
+
+  let seekDebounceTimer = null;
+  function onSeeking() {
+    clearTimeout(seekDebounceTimer);
+    seekDebounceTimer = setTimeout(() => {
+      seekDebounceTimer = null;
+      cancelStaleChunks();
+    }, 300);
+  }
+
   function startSync() {
     if (!currentVideo) return;
     // Defensive: eski listener'ı kaldır (memory leak koruması).
     // SPA navigasyonda currentVideo referansı değişse bile handler temiz kalır.
     currentVideo.removeEventListener('timeupdate', onTimeUpdate);
     currentVideo.addEventListener('timeupdate', onTimeUpdate);
+    currentVideo.removeEventListener('seeking', onSeeking);
+    currentVideo.addEventListener('seeking', onSeeking);
     syncListenerAttached = true;
   }
 
@@ -1153,8 +1182,10 @@
       enableNativeTextTracks(currentVideo);
       showCCButton();
       currentVideo.removeEventListener('timeupdate', onTimeUpdate);
+      currentVideo.removeEventListener('seeking', onSeeking);
       currentVideo = null;
     }
+    if (seekDebounceTimer) { clearTimeout(seekDebounceTimer); seekDebounceTimer = null; }
     currentContainer = null;
     syncListenerAttached = false;
     statusMessage = null;
