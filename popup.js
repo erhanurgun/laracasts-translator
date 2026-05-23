@@ -126,9 +126,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     els.modelStatus.className = `status ${level || ''}`;
   }
 
-  // Modelleri yükle: FAZ 4'te background'a FETCH_MODELS mesajı gider. Şimdilik
-  // fallback statik liste kullanılır (popup.html ilk açılış için yeterli).
-  async function loadModels(_forceRefresh = false) {
+  // Modelleri background'dan yükle. forceRefresh true ise 24h cache atlanır.
+  // Hata/API erişimsizliğinde fallback statik liste gösterilir.
+  async function loadModels(forceRefresh = false) {
     const activeModel = (await Storage.getSettings()).openaiModel;
     const apiKey = els.apiKey.value.trim();
 
@@ -138,8 +138,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    populateModels(C.OPENAI_MODELS_FALLBACK, activeModel);
-    setModelStatus(null);
+    if (forceRefresh) {
+      setModelStatus('popup.model.loading', '');
+    }
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'FETCH_MODELS',
+        forceRefresh: !!forceRefresh
+      });
+
+      if (!response || !response.success) {
+        populateModels(C.OPENAI_MODELS_FALLBACK, activeModel);
+        const msgKey = response && response.needsKey ? 'popup.model.needsKey' : 'popup.model.error';
+        setModelStatus(msgKey, 'error');
+        return;
+      }
+
+      populateModels(response.models, activeModel);
+      if (response.fromFallback) {
+        setModelStatus('popup.model.error', 'error');
+      } else {
+        setModelStatus(null);
+      }
+    } catch (err) {
+      console.error('LCT-Popup: loadModels hata:', err);
+      populateModels(C.OPENAI_MODELS_FALLBACK, activeModel);
+      setModelStatus('popup.model.error', 'error');
+    }
   }
 
   // Ayarları yükle

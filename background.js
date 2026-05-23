@@ -16,7 +16,9 @@ importScripts(
   'lib/origin-guard.js',
   'lib/log-sanitizer.js',
   'lib/settings-bg.js',
-  'lib/translation-cache-bg.js'
+  'lib/translation-cache-bg.js',
+  'lib/languages.js',
+  'lib/model-fetch.js'
 );
 
 const C = self.LCTConstants;
@@ -26,6 +28,8 @@ const Guard = self.LCTOriginGuard;
 const Logs = self.LCTLogSanitizer;
 const SettingsBg = self.LCTSettingsBg;
 const TranslationCacheBg = self.LCTTranslationCacheBg;
+const Languages = self.LCTLanguages;
+const ModelFetch = self.LCTModelFetch;
 
 // --- Keep-Alive ---
 
@@ -334,6 +338,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.tabs.sendMessage(tab.id, { type: 'SETTINGS_CHANGED' }).catch(() => {});
       }
     });
+    return true;
+  }
+
+  if (message.type === 'FETCH_MODELS') {
+    if (!Guard.isValidRuntimeSender(sender)) {
+      sendResponse({ success: false, error: 'Yetkisiz kaynak' });
+      return true;
+    }
+    (async () => {
+      try {
+        const apiKey = await SettingsBg.getApiKey();
+        if (!apiKey) {
+          sendResponse({ success: false, error: 'API key gerekli', needsKey: true });
+          return;
+        }
+        const result = await ModelFetch.getCachedOrFetch(apiKey, !!message.forceRefresh);
+        sendResponse({ success: true, ...result });
+      } catch (e) {
+        sendResponse({ success: false, error: e && e.message ? e.message : 'Model fetch hatası' });
+      }
+    })();
     return true;
   }
 });
