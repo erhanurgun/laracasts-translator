@@ -29,6 +29,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let currentUiLang = 'tr';
 
+  // Range slider'ın dolu kısmını brand rengiyle boyar (webkit track tek renk
+  // olduğu için JS gradient gerekir; Firefox ::-moz-range-progress kullanır).
+  function updateRangeFill(el) {
+    if (!el) return;
+    const min = parseFloat(el.min) || 0;
+    const max = parseFloat(el.max) || 100;
+    const val = parseFloat(el.value);
+    const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
+    el.style.background = `linear-gradient(90deg, #4f46e5 0%, #6d28d9 ${pct}%, #2a2a4a ${pct}%, #2a2a4a 100%)`;
+  }
+
   function applyI18n(lang) {
     currentUiLang = lang;
     document.documentElement.lang = lang;
@@ -64,6 +75,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     els.translationColor.value = settings.translationColor;
     els.bgOpacity.value = Math.round(settings.bgOpacity * 100);
     els.bgOpacityValue.textContent = Math.round(settings.bgOpacity * 100);
+    updateRangeFill(els.fontSize);
+    updateRangeFill(els.bgOpacity);
     els.uiLanguage.value = settings.uiLanguage;
     els.targetLanguage.value = settings.targetLanguage;
     // apiKey'i de UI'a yansıt (loadModels'in popup açılışta sk-... görmesi için)
@@ -247,6 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let fontSizeTimer;
   els.fontSize.addEventListener('input', () => {
     els.fontSizeValue.textContent = els.fontSize.value;
+    updateRangeFill(els.fontSize);
     clearTimeout(fontSizeTimer);
     fontSizeTimer = setTimeout(() => {
       Storage.saveSetting('fontSize', parseInt(els.fontSize.value));
@@ -267,6 +281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let bgOpacityTimer;
   els.bgOpacity.addEventListener('input', () => {
     els.bgOpacityValue.textContent = els.bgOpacity.value;
+    updateRangeFill(els.bgOpacity);
     clearTimeout(bgOpacityTimer);
     bgOpacityTimer = setTimeout(() => {
       Storage.saveSetting('bgOpacity', parseInt(els.bgOpacity.value) / 100);
