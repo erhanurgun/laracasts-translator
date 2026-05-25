@@ -41,7 +41,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const max = parseFloat(el.max) || 100;
     const val = parseFloat(el.value);
     const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
-    el.style.background = `linear-gradient(90deg, #4f46e5 0%, #6d28d9 ${pct}%, #2a2a4a ${pct}%, #2a2a4a 100%)`;
+    // Nötr monokrom: dolu kısım gri gradient, boş kısım border-strong
+    el.style.background = `linear-gradient(90deg, #717171 0%, #b5b5b5 ${pct}%, #2a2a2a ${pct}%, #2a2a2a 100%)`;
   }
 
   function applyI18n(lang) {

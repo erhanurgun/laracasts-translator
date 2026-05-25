@@ -37,8 +37,9 @@
       bottom: '16px',
       right: '16px',
       padding: '6px 12px',
-      background: 'rgba(79, 70, 229, 0.9)',
-      color: '#fff',
+      background: 'rgba(26, 26, 26, 0.95)',
+      color: '#fafafa',
+      border: '1px solid #2a2a2a',
       fontSize: '12px',
       fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
       borderRadius: '6px',
@@ -46,7 +47,7 @@
       pointerEvents: 'none',
       opacity: '0',
       transition: 'opacity 0.3s ease',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+      boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
     });
 
     document.body.appendChild(indicator);

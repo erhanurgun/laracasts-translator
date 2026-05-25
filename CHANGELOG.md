@@ -3,6 +3,20 @@
 Tüm önemli değişiklikler bu dosyada belgelenir.
 Format [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standardını takip eder ve proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [0.5.4] - 2026-05-25
+
+### Değişti
+
+- Popup ve video sayfası durum göstergesi nötr monokrom palete geçti. Lacivert yüzeyler (#16213e, #1a1a2e) ve indigo/mor accent (#4f46e5, #6d28d9) kaldırıldı.
+- `popup.css` başına `:root` CSS değişken bloğu eklendi (--surface-bg #0a0a0a, --surface-card #121212, --surface-elevated #1a1a1a, --text-primary #fafafa, --text-secondary #b5b5b5, --text-muted #717171, --border-subtle #1f1f1f, --border-strong #2a2a2a + türetilmiş accent/semantik). Tüm hardcoded renkler `var(--...)` ile değiştirildi; gelecekte tema değişimi tek bloktan yapılabilir.
+- Monokrom vurgu: toggle on/checkbox checked/seçili option → beyaz (#fafafa) zemin + koyu (#0a0a0a) kontrast; slider thumb beyaz, dolu kısım gri gradient; focus halkaları beyazımsı; scrollbar gri gradient.
+- `content-laracasts.js` durum göstergesi indigo'dan koyu (#1a1a1a) zemin + açık metin + ince kenarlığa geçti.
+
+### Korundu
+
+- Durum renkleri semantik: hata (kırmızı), başarı (yeşil), "Önbelleği Temizle" (kırmızı) buton.
+- Altyazı overlay renkleri kullanıcı ayarıdır (orijinal/çeviri rengi, arka plan opaklığı), tema değişiminden etkilenmez.
+
 ## [0.5.3] - 2026-05-23
 
 ### Eklendi

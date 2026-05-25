@@ -1,45 +1,67 @@
+:root {
+  /* Yüzeyler */
+  --surface-bg: #0a0a0a;
+  --surface-card: #121212;
+  --surface-elevated: #1a1a1a;
+  /* Metin */
+  --text-primary: #fafafa;
+  --text-secondary: #b5b5b5;
+  --text-muted: #717171;
+  /* Kenarlık */
+  --border-subtle: #1f1f1f;
+  --border-strong: #2a2a2a;
+  /* Türetilmiş - monokrom accent (palet içi) */
+  --accent: #fafafa;
+  --accent-contrast: #0a0a0a;
+  --hover-surface: #1f1f1f;
+  --focus-ring: rgba(250, 250, 250, 0.16);
+  /* Korunan semantik (kullanıcı geri bildirimi netliği) */
+  --success: #22c55e;
+  --error: #ef4444;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
   /* Firefox scrollbar */
   scrollbar-width: thin;
-  scrollbar-color: #4f46e5 #16213e;
+  scrollbar-color: var(--text-muted) var(--surface-card);
 }
 
-/* Webkit scrollbar (popup body + taşan alanlar). Native <select> açılan
-   liste OS-rendered olduğu için bu kural ona uygulanmaz; popup içeriğine
-   uygulanır. */
+/* Webkit scrollbar (popup body + taşan alanlar + custom dropdown panel). */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #16213e;
+  background: var(--surface-card);
   border-radius: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #4f46e5, #6d28d9);
+  background: linear-gradient(180deg, var(--border-strong), var(--text-muted));
   border-radius: 6px;
-  border: 2px solid #16213e;
+  border: 2px solid var(--surface-card);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #6366f1, #7c3aed);
+  background: linear-gradient(180deg, var(--text-muted), var(--text-secondary));
 }
 
 ::-webkit-scrollbar-corner {
-  background: #16213e;
+  background: var(--surface-card);
 }
 
 body {
   width: 420px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 12.5px;
-  color: #e0e0e0;
-  background: linear-gradient(160deg, #1a1a2e 0%, #16182b 100%);
+  color: var(--text-primary);
+  background: linear-gradient(160deg, var(--surface-bg) 0%, var(--surface-card) 100%);
 }
 
 .popup {
@@ -52,16 +74,16 @@ body {
   justify-content: space-between;
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #2a2a4a;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .header h1 {
   font-size: 14px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
-/* Toggle switch */
+/* Toggle switch: off → gri track + beyaz knob, on → beyaz track + koyu knob */
 .toggle-switch {
   position: relative;
   display: inline-block;
@@ -79,7 +101,7 @@ body {
   position: absolute;
   cursor: pointer;
   inset: 0;
-  background: #444;
+  background: var(--border-strong);
   border-radius: 22px;
   transition: background 0.2s;
 }
@@ -91,17 +113,18 @@ body {
   width: 16px;
   left: 3px;
   bottom: 3px;
-  background: white;
+  background: var(--text-primary);
   border-radius: 50%;
-  transition: transform 0.2s;
+  transition: transform 0.2s, background 0.2s;
 }
 
 .toggle-switch input:checked + .slider {
-  background: #4f46e5;
+  background: var(--accent);
 }
 
 .toggle-switch input:checked + .slider::before {
   transform: translateX(18px);
+  background: var(--accent-contrast);
 }
 
 /* Sections */
@@ -112,7 +135,7 @@ body {
 .section-title {
   font-size: 10.5px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   margin-bottom: 4px;
@@ -121,12 +144,12 @@ body {
 .label {
   display: block;
   font-size: 11.5px;
-  color: #9ca3af;
+  color: var(--text-secondary);
   margin-bottom: 2px;
 }
 
 .api-key-link {
-  color: #93c5fd;
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: 11px;
   margin-left: 4px;
@@ -134,7 +157,7 @@ body {
 
 .api-key-link:hover {
   text-decoration: underline;
-  color: #bfdbfe;
+  color: var(--text-primary);
 }
 
 /* API key */
@@ -146,10 +169,10 @@ body {
 .input {
   flex: 1;
   padding: 7px 10px;
-  background: #16213e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 11.5px;
   font-family: monospace;
   outline: none;
@@ -157,21 +180,21 @@ body {
 }
 
 .input:hover {
-  border-color: #3a3a5f;
+  border-color: var(--text-muted);
 }
 
 .input:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.22);
-  background: #1a2748;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  background: var(--surface-elevated);
 }
 
 .btn-icon {
   padding: 4px 8px;
-  background: #16213e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 14px;
   display: inline-flex;
@@ -181,9 +204,9 @@ body {
 }
 
 .btn-icon:hover {
-  background: #232342;
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18);
+  background: var(--hover-surface);
+  border-color: var(--text-muted);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .btn-icon:active {
@@ -197,26 +220,26 @@ body {
 }
 
 .status.error {
-  color: #ef4444;
+  color: var(--error);
 }
 
 .status.success {
-  color: #22c55e;
+  color: var(--success);
 }
 
-/* Dropdown */
+/* Dropdown (gizli native select; görünür custom dropdown aşağıda) */
 .select {
   width: 100%;
   padding: 7px 10px;
-  background-color: #16213e;
-  border: 1px solid #2a2a4a;
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 11.5px;
   outline: none;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b5b5b5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
   background-repeat: no-repeat;
   background-position: right 9px center;
   padding-right: 28px;
@@ -224,13 +247,13 @@ body {
 }
 
 .select:hover {
-  border-color: #3a3a5f;
-  background-color: #1a2748;
+  border-color: var(--text-muted);
+  background-color: var(--surface-elevated);
 }
 
 .select:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.22);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .select:disabled {
@@ -238,11 +261,9 @@ body {
   cursor: not-allowed;
 }
 
-/* Native <option> stilini koyu temaya uydur (Chrome'da sınırlı destek,
-   Windows/Linux'ta uygulanır). */
 .select option {
-  background: #16213e;
-  color: #e0e0e0;
+  background: var(--surface-card);
+  color: var(--text-primary);
 }
 
 /* --- Custom dropdown (lib/custom-select.js) --- */
@@ -258,10 +279,10 @@ body {
 .lct-cs-trigger {
   width: 100%;
   padding: 7px 28px 7px 10px;
-  background-color: #16213e;
-  border: 1px solid #2a2a4a;
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 11.5px;
   text-align: left;
   cursor: pointer;
@@ -273,13 +294,13 @@ body {
 }
 
 .lct-cs-trigger:hover {
-  border-color: #3a3a5f;
-  background-color: #1a2748;
+  border-color: var(--text-muted);
+  background-color: var(--surface-elevated);
 }
 
 .lct-cs.open .lct-cs-trigger {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.22);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .lct-cs-arrow {
@@ -288,8 +309,8 @@ body {
   top: 50%;
   width: 8px;
   height: 8px;
-  border-right: 2px solid #9ca3af;
-  border-bottom: 2px solid #9ca3af;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
   transform: translateY(-65%) rotate(45deg);
   transition: transform 0.2s ease;
   pointer-events: none;
@@ -305,12 +326,12 @@ body {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #16213e;
-  border: 1px solid #4f46e5;
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   overflow-y: auto;
   z-index: 100;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   padding: 4px;
 }
 
@@ -323,7 +344,7 @@ body {
   border-radius: 5px;
   cursor: pointer;
   font-size: 11.5px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -331,12 +352,12 @@ body {
 }
 
 .lct-cs-option:hover {
-  background: #232342;
+  background: var(--hover-surface);
 }
 
 .lct-cs-option.selected {
-  background: linear-gradient(135deg, #4f46e5, #6d28d9);
-  color: #ffffff;
+  background: var(--accent);
+  color: var(--accent-contrast);
   font-weight: 600;
 }
 
@@ -387,28 +408,28 @@ body {
   margin: 0;
 }
 
-/* Custom checkbox: native appearance kaldırılır, brand renkli kutu + tik */
+/* Custom checkbox: native appearance kaldırılır, monokrom kutu + tik */
 .popup input[type="checkbox"]:not(.toggle-switch input) {
   appearance: none;
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  border: 1.5px solid #3a3a5a;
+  border: 1.5px solid var(--border-strong);
   border-radius: 5px;
-  background: #16213e;
+  background: var(--surface-card);
   cursor: pointer;
   position: relative;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .popup input[type="checkbox"]:not(.toggle-switch input):hover {
-  border-color: #4f46e5;
+  border-color: var(--text-muted);
 }
 
 .popup input[type="checkbox"]:not(.toggle-switch input):checked {
-  background: linear-gradient(135deg, #4f46e5, #6d28d9);
-  border-color: #4f46e5;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .popup input[type="checkbox"]:not(.toggle-switch input):checked::after {
@@ -418,13 +439,13 @@ body {
   top: 1px;
   width: 4px;
   height: 8px;
-  border: solid #fff;
+  border: solid var(--accent-contrast);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
 
 .popup input[type="checkbox"]:not(.toggle-switch input):focus-visible {
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .colors {
@@ -460,7 +481,7 @@ body {
 .colors input[type="color"] {
   width: 36px;
   height: 30px;
-  border: 1px solid #2a2a4a;
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
   background: none;
   cursor: pointer;
@@ -470,8 +491,8 @@ body {
 
 .colors input[type="color"]:hover {
   transform: scale(1.08);
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .colors input[type="color"]::-webkit-color-swatch-wrapper {
@@ -483,14 +504,14 @@ body {
   border-radius: 4px;
 }
 
-/* Custom range slider: ince track + brand fill (JS gradient) + belirgin thumb */
+/* Custom range slider: ince track + nötr gri fill (JS gradient) + beyaz thumb */
 .range {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 6px;
   border-radius: 4px;
-  background: #2a2a4a;
+  background: var(--border-strong);
   outline: none;
   cursor: pointer;
 }
@@ -501,16 +522,16 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #ffffff;
-  border: 3px solid #4f46e5;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  background: var(--text-primary);
+  border: 3px solid var(--surface-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .range::-webkit-slider-thumb:hover {
   transform: scale(1.18);
-  box-shadow: 0 0 0 5px rgba(79, 70, 229, 0.22);
+  box-shadow: 0 0 0 5px var(--focus-ring);
 }
 
 .range:active::-webkit-slider-thumb {
@@ -521,28 +542,28 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #ffffff;
-  border: 3px solid #4f46e5;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  background: var(--text-primary);
+  border: 3px solid var(--surface-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   cursor: pointer;
 }
 
 .range::-moz-range-track {
   height: 6px;
   border-radius: 4px;
-  background: #2a2a4a;
+  background: var(--border-strong);
 }
 
 .range::-moz-range-progress {
   height: 6px;
   border-radius: 4px;
-  background: linear-gradient(90deg, #4f46e5, #6d28d9);
+  background: linear-gradient(90deg, var(--text-muted), var(--text-secondary));
 }
 
 /* Cache */
 .cache-stats {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
@@ -554,7 +575,7 @@ body {
   cursor: pointer;
   font-weight: 600;
   letter-spacing: 0.2px;
-  transition: background 0.18s ease, transform 0.1s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  transition: background 0.18s ease, transform 0.1s ease, box-shadow 0.18s ease, filter 0.18s ease, border-color 0.18s ease;
 }
 
 .btn:active {
@@ -562,25 +583,27 @@ body {
 }
 
 .btn-secondary {
-  background: linear-gradient(135deg, #374151, #2d3543);
-  color: #e0e0e0;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
   width: 100%;
 }
 
 .btn-secondary:hover {
-  background: linear-gradient(135deg, #4b5563, #3d4757);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  background: var(--hover-surface);
+  border-color: var(--text-muted);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  color: white;
+  background: var(--danger);
+  color: #fff;
   width: 100%;
 }
 
 .btn-danger:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 3px 12px rgba(220, 38, 38, 0.45);
+  background: var(--danger-hover);
+  box-shadow: 0 3px 12px rgba(220, 38, 38, 0.4);
 }
 
 /* Yardım ikonu + tooltip. Uzun parantezli açıklamaları arayüzde yer
@@ -593,8 +616,8 @@ body {
   width: 14px;
   height: 14px;
   margin-left: 6px;
-  background: #2a2a4a;
-  color: #9ca3af;
+  background: var(--border-strong);
+  color: var(--text-secondary);
   border-radius: 50%;
   font-size: 10px;
   font-weight: 700;
@@ -608,8 +631,8 @@ body {
 }
 
 .help-icon:hover {
-  background: #4f46e5;
-  color: #ffffff;
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 /* Tooltip: help-icon'un sağ kenarına yaslı, sola doğru büyür.
@@ -621,11 +644,11 @@ body {
   right: -4px;
   left: auto;
   transform: none;
-  background: #16213e;
-  color: #e0e0e0;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
   padding: 6px 10px;
   border-radius: 4px;
-  border: 1px solid #2a2a4a;
+  border: 1px solid var(--border-strong);
   font-size: 11px;
   font-weight: 400;
   line-height: 1.35;
