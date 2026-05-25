@@ -46,7 +46,7 @@ describe('LCTConstants', () => {
     expect(LCTConstants.STORAGE_KEY_LEGACY_API).toBe('_lct_apiKey');
   });
 
-  // v0.5.0: çoklu dil + dinamik model
+  // Çoklu dil + dinamik model
   it('DEFAULT_SETTINGS uiLanguage en olmalı (varsayılan arayüz dili)', () => {
     expect(LCTConstants.DEFAULT_SETTINGS.uiLanguage).toBe('en');
   });

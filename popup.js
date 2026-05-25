@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (key) {
         els.apiKeyStatus.textContent = I18N.t('popup.apiKey.savedActive', currentUiLang);
         els.apiKeyStatus.className = 'status success';
-        // API key girilince modelleri yeniden yükle (FAZ 4 canlı fetch)
+        // API key girilince modelleri yeniden yükle (canlı fetch)
         loadModels(false);
       } else {
         els.apiKeyStatus.textContent = I18N.t('popup.apiKey.missing', currentUiLang);

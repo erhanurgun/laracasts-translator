@@ -1,11 +1,11 @@
-# v0.5.1 Performans UAT Senaryoları
+# Performans UAT Senaryoları
 
-Bu doküman v0.5.1 performans paketinin (Laracasts video player kasıntı düzeltmeleri) manuel doğrulama adımlarını içerir. Her senaryoda mevcut durum (Before) ve hedeflenen sonuç (After) verilmiştir.
+Bu doküman performans paketinin (Laracasts video player kasıntı düzeltmeleri) manuel doğrulama adımlarını içerir. Her senaryoda mevcut durum (Before) ve hedeflenen sonuç (After) verilmiştir.
 
 ## Ön Hazırlık
 
 1. `chrome://extensions` → Geliştirici modu açık → **Paketlenmemiş yükle** → projeyi seç.
-2. Eklenti sürüm 0.5.1 olarak görünmeli.
+2. Eklenti yüklenmeli.
 3. Popup'tan `sk-` ile başlayan geçerli bir OpenAI API key gir.
 4. Laracasts'te 1080p bir video aç (ör. `https://laracasts.com/series/everything-new-in-livewire-4/episodes/1`).
 5. Çevirinin tamamlanmasını bekle.
@@ -18,7 +18,7 @@ Bu doküman v0.5.1 performans paketinin (Laracasts video player kasıntı düzel
 2. 30 saniye boyunca 5 kere ileri seek (>30sn) ve 5 kere geri seek (<10sn) yap.
 3. Record durdur, **Frames** görünümünde dropped frame sayısını oku.
 
-| Before (v0.5.0) | After (v0.5.1) hedef |
+| Before | After hedef |
 |---|---|
 | 30-50 dropped frame | 0-5 dropped frame |
 

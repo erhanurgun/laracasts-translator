@@ -57,7 +57,7 @@ describe('LCTTranslationCacheBg.evictOldest()', () => {
   });
 });
 
-describe('LCTTranslationCacheBg langCode parametresi (v0.5.0)', () => {
+describe('LCTTranslationCacheBg langCode parametresi', () => {
   it('get langCode parametresiyle farklı dil cache\'i okur', async () => {
     await chrome.storage.local.set({
       'translation_vid_tr': { cues: [{ text: 'a' }], fingerprint: 'f', timestamp: 1 },
