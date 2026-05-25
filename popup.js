@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const C = self.LCTConstants;
 
   let currentUiLang = 'tr';
+  // Custom dropdown instance'ları (lib/custom-select.js); populate sonrası refresh
+  let uiCS = null;
+  let targetCS = null;
+  let modelCS = null;
 
   // Range slider'ın dolu kısmını brand rengiyle boyar (webkit track tek renk
   // olduğu için JS gradient gerekir; Firefox ::-moz-range-progress kullanır).
@@ -83,6 +87,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof settings.apiKey === 'string') {
       els.apiKey.value = settings.apiKey;
     }
+    // Custom dropdown label'larını senkronize et (reset defaults sonrası)
+    if (uiCS) uiCS.refresh();
+    if (targetCS) targetCS.refresh();
     // openaiModel dropdown'u modeller yüklendikten sonra doldurulur, kullanıcı seçimi
     // populateModels içinde uygulanır.
   }
@@ -131,6 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       frag.appendChild(opt);
     }
     els.openaiModel.replaceChildren(frag);
+    if (modelCS) modelCS.refresh();
   }
 
   function setModelStatus(messageKey, level) {
@@ -192,6 +200,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   applySettingsToUI(settings); // apiKey burada UI'a yazılır
   applyI18n(settings.uiLanguage); // i18n + refreshApiKeyStatus (apiKey set olduğu için doğru gösterilir)
   await loadModels(false); // apiKey görünür, kayıtlıysa fetch tetikler
+
+  // Native select'leri custom dropdown'a çevir (brand scrollbar + option stili).
+  // populate + value set sonrası oluşturulur ki ilk label doğru olsun.
+  if (typeof self.createCustomSelect === 'function') {
+    uiCS = self.createCustomSelect(els.uiLanguage, { maxPanelHeight: 160 });
+    targetCS = self.createCustomSelect(els.targetLanguage, { maxPanelHeight: 260 });
+    modelCS = self.createCustomSelect(els.openaiModel, { maxPanelHeight: 260 });
+  }
 
   // API key göster/gizle
   els.toggleApiKey.addEventListener('click', () => {

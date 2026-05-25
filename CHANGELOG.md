@@ -13,6 +13,8 @@ Format [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standardını ta
 ### Değişti
 
 - Çeviri hedef dili listesi sadeleştirildi: bölgesel varyantlar tek dile indirildi (pt-BR + pt-PT → pt "Português", zh-CN + zh-TW → zh "中文"). 25 → 23 dil. Dropdown formatı yalnızca ana dil adını gösterir (parantez içi İngilizce ad kaldırıldı, "English (English)" tekrarı giderildi). Eski `pt-BR`/`zh-CN` cache anahtarları regex'e uyumlu kaldığı için temizlenmez.
+- Popup form elementleri brand temalı custom görünüme kavuştu: scrollbar (webkit + Firefox), range slider (brand thumb + dolu kısım gradient), checkbox (custom tik), color picker, button (gradient + hover), input/select (focus glow).
+- `lib/custom-select.js`: native `<select>` açılan listesi OS-rendered olduğu ve scrollbar/option CSS ile özelleştirilemediği için custom dropdown ile değiştirildi. Üç dropdown (arayüz dili, çeviri hedef dili, OpenAI modeli) artık brand scrollbar'lı, hover/seçili vurgulu, klavye-navigasyonlu panel kullanır. Native select gizli state kaynağı olarak kalır (change event uyumu).
 
 ### Notlar
 
