@@ -330,8 +330,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   els.refreshModels.addEventListener('click', async () => {
+    els.refreshModels.classList.add('spinning');
     setModelStatus('popup.model.loading', '');
-    await loadModels(true);
+    try {
+      await loadModels(true);
+    } finally {
+      els.refreshModels.classList.remove('spinning');
+    }
   });
 
   // Varsayılana sıfırla (API key hariç)
