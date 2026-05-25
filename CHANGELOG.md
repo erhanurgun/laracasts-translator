@@ -10,6 +10,10 @@ Format [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standardını ta
 - `unlimitedStorage` permission'ı manifest'e eklendi. `chrome.storage.local` 5MB default quota'sı kalkıyor, çevrilen video transkriptleri ve cue tabloları sınırsız diske saklanır.
 - LRU evict mekanizması (`lib/translation-cache-bg.js -> evictOldest`) yerinde duruyor ama artık tetiklenmez — `QUOTA_BYTES` hatası `unlimitedStorage` ile fırlatılmaz. Defensive olarak fallback kodu korunuyor (permission yokken eski davranış).
 
+### Değişti
+
+- Çeviri hedef dili listesi sadeleştirildi: bölgesel varyantlar tek dile indirildi (pt-BR + pt-PT → pt "Português", zh-CN + zh-TW → zh "中文"). 25 → 23 dil. Dropdown formatı yalnızca ana dil adını gösterir (parantez içi İngilizce ad kaldırıldı, "English (English)" tekrarı giderildi). Eski `pt-BR`/`zh-CN` cache anahtarları regex'e uyumlu kaldığı için temizlenmez.
+
 ### Notlar
 
 - Tüm geçmiş çeviriler sonsuza dek sürer (manuel "Önbelleği Temizle" butonu hâlâ çalışır).
@@ -74,7 +78,7 @@ Laracasts video player'da ileri/geri sarma, oynat/duraklat sırasında yaşanan 
 ### Eklendi
 
 - Arayüz dili seçimi: Türkçe (varsayılan) ve İngilizce. Popup'tan değiştirilir, tüm metinler anlık güncellenir
-- Çeviri hedef dili seçimi: 25 BCP-47 dil (tr, en, de, es, fr, it, pt-BR, pt-PT, ja, ko, zh-CN, zh-TW, ar, ru, nl, pl, sv, da, no, fi, cs, uk, hi, id, vi). Varsayılan: tr
+- Çeviri hedef dili seçimi: 23 BCP-47 dil (tr, en, de, es, fr, it, pt, ja, ko, zh, ar, ru, nl, pl, sv, da, no, fi, cs, uk, hi, id, vi). Varsayılan: tr
 - Dinamik OpenAI model seçimi: `/v1/models` endpoint'inden çekilir, 24 saatlik `chrome.storage.local` cache, yenile butonuyla cache atlatılır
 - Fallback model listesi (`gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-3.5-turbo`): API erişilemediğinde sunulur
 - Dil veya model değişiminde aktif çeviri otomatik yenilenir (sayfa yenileme gerekmez)

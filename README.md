@@ -5,7 +5,7 @@
 <h1 align="center">Laracasts Translator</h1>
 
 <p align="center">
-  Laracasts video derslerindeki İngilizce altyazıları gerçek zamanlı olarak istediğiniz dile çeviren Chrome eklentisi. Türkçe varsayılan, 25 BCP-47 dil seçeneği.
+  Laracasts video derslerindeki İngilizce altyazıları gerçek zamanlı olarak istediğiniz dile çeviren Chrome eklentisi. Türkçe varsayılan, 23 BCP-47 dil seçeneği.
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Manifest-v3-orange" alt="Manifest V3">
   <img src="https://img.shields.io/badge/API-OpenAI-red" alt="API">
   <img src="https://img.shields.io/badge/Model-Seçilebilir-purple" alt="Model">
-  <img src="https://img.shields.io/badge/Diller-25_BCP--47-teal" alt="Diller">
+  <img src="https://img.shields.io/badge/Diller-23_BCP--47-teal" alt="Diller">
 </p>
 
 ---
@@ -61,8 +61,8 @@ API key, altyazı görünümü, renkler, yazı boyutu, öğrenme modu ve önbell
 ## Özellikler
 
 - **Gerçek zamanlı çeviri** - Video oynatılırken altyazılar anında hedef dile çevrilir (çeviri tamamlandıkça)
-- **Çoklu hedef dil** - 25 BCP-47 dil arasından seçim: Türkçe (varsayılan), İngilizce, Almanca, Fransızca,
-  İspanyolca, İtalyanca, Portekizce (BR/PT), Japonca, Korece, Çince (Basit/Geleneksel), Arapça, Rusça,
+- **Çoklu hedef dil** - 23 BCP-47 dil arasından seçim: Türkçe (varsayılan), İngilizce, Almanca, Fransızca,
+  İspanyolca, İtalyanca, Portekizce, Japonca, Korece, Çince, Arapça, Rusça,
   Felemenkçe, Lehçe, İsveççe, Danca, Norveççe, Fince, Çekçe, Ukraynaca, Hintçe, Endonezce, Vietnamca
 - **Çoklu arayüz dili** - Popup TR/EN arasında anlık değiştirilir, tüm metinler i18n bundle'ından gelir
 - **Dinamik model seçimi** - OpenAI `/v1/models` endpoint'inden mevcut modeller (gpt-4o, gpt-4o-mini,
@@ -150,7 +150,7 @@ Popup menüsünden aşağıdaki ayarlar değiştirilebilir:
 |-----------------------------|-------------------|------------------------------------------------------------------|
 | **Eklenti durumu**          | Açık              | Çeviriyi etkinleştir/devre dışı bırak                            |
 | **Arayüz dili**             | Türkçe            | Popup metinleri TR/EN arasında değiştirilebilir, anlık uygulanır |
-| **Çeviri hedef dili**       | Türkçe            | 25 BCP-47 dil seçeneği (de, es, fr, ja, ko, zh-CN, ar vb.)       |
+| **Çeviri hedef dili**       | Türkçe            | 23 BCP-47 dil seçeneği (de, es, fr, ja, ko, zh, ar vb.)          |
 | **OpenAI modeli**           | gpt-5.4-nano      | API'den çekilen aktif modeller; yenile butonu cache'i atlatır    |
 | **Orijinal altyazı**        | Açık              | İngilizce altyazıyı göster/gizle                                 |
 | **Çeviri altyazısı**        | Açık              | Çeviri altyazıyı göster/gizle                                    |
@@ -176,7 +176,7 @@ laracasts-translator/
 ├── lib/                               # İzole edilmiş sorumluluk modülleri (SRP)
 │   ├── constants.js                   # Tüm modüllerin okuduğu tek kaynak sabitler
 │   ├── cache-keys.js                  # Çeviri cache anahtar şeması (translation_<videoId>_<langCode>)
-│   ├── languages.js                   # 25 BCP-47 hedef dil + TR/EN UI dilleri registry'si
+│   ├── languages.js                   # 23 BCP-47 hedef dil + TR/EN UI dilleri registry'si
 │   ├── i18n.js                        # Popup TR/EN mesaj bundle'ı + applyTo DOM helper'ı
 │   ├── model-fetch.js                 # OpenAI /v1/models cache'li fetch + fallback liste
 │   ├── fingerprint.js                 # VTT içeriğinden cache doğrulama fingerprint'i

@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (const lang of Languages.TARGET) {
       const opt = document.createElement('option');
       opt.value = lang.code;
-      opt.textContent = `${lang.native} (${lang.name})`;
+      opt.textContent = lang.native;
       frag.appendChild(opt);
     }
     els.targetLanguage.replaceChildren(frag);

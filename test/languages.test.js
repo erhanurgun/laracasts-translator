@@ -38,10 +38,23 @@ describe('LCTLanguages.TARGET', () => {
     }
   });
 
-  it('Asya dillerini içermeli (ja, ko, zh-CN)', () => {
-    for (const code of ['ja', 'ko', 'zh-CN']) {
+  it('Asya dillerini içermeli (ja, ko, zh)', () => {
+    for (const code of ['ja', 'ko', 'zh']) {
       expect(LCTLanguages.TARGET.find(l => l.code === code)).toBeTruthy();
     }
+  });
+
+  it('aynı dilden tek varyant bulunur (bölgesel duplicate yok)', () => {
+    const codes = LCTLanguages.TARGET.map(l => l.code);
+    // pt-BR/pt-PT yerine tek pt, zh-CN/zh-TW yerine tek zh
+    expect(codes).toContain('pt');
+    expect(codes).toContain('zh');
+    expect(codes).not.toContain('pt-BR');
+    expect(codes).not.toContain('pt-PT');
+    expect(codes).not.toContain('zh-CN');
+    expect(codes).not.toContain('zh-TW');
+    // Kod benzersiz olmalı
+    expect(new Set(codes).size).toBe(codes.length);
   });
 
   it('her hedef dilde code/name/native alanları bulunmalı', () => {
@@ -71,8 +84,8 @@ describe('LCTLanguages.getTargetName()', () => {
     expect(LCTLanguages.getTargetName('de')).toBe('German');
   });
 
-  it('zh-CN -> Chinese (Simplified) döndürmeli', () => {
-    expect(LCTLanguages.getTargetName('zh-CN')).toBe('Chinese (Simplified)');
+  it('zh -> Chinese döndürmeli', () => {
+    expect(LCTLanguages.getTargetName('zh')).toBe('Chinese');
   });
 
   it('bilinmeyen kod -> Turkish fallback', () => {
@@ -100,7 +113,7 @@ describe('LCTLanguages.getTargetNative()', () => {
 describe('LCTLanguages.isSupportedTarget()', () => {
   it('listede olan kod için true', () => {
     expect(LCTLanguages.isSupportedTarget('tr')).toBe(true);
-    expect(LCTLanguages.isSupportedTarget('zh-CN')).toBe(true);
+    expect(LCTLanguages.isSupportedTarget('zh')).toBe(true);
   });
 
   it('listede olmayan kod için false', () => {
