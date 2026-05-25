@@ -213,6 +213,16 @@ body {
   transform: scale(0.9);
 }
 
+/* Modelleri yenile: fetch sırasında ikon döner */
+@keyframes lct-spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-icon.spinning svg {
+  animation: lct-spin 0.7s linear infinite;
+  transform-origin: center;
+}
+
 .status {
   font-size: 11px;
   margin-top: 4px;
@@ -407,6 +417,8 @@ body {
 }
 
 .checkbox-row label {
+  display: flex;
+  align-items: center;
   margin: 0;
   font-size: 11px;
   gap: 5px;
