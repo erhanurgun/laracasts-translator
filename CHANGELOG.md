@@ -3,7 +3,17 @@
 Tüm önemli değişiklikler bu dosyada belgelenir.
 Format [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) standardını takip eder ve proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
-## [0.5.4] - 2026-05-25
+## [0.5.5] - 2026-05-25
+
+### Değişti
+
+- Varsayılan arayüz dili Türkçe'den İngilizce'ye (`en`) çekildi. Çeviri hedef dili varsayılanı Türkçe (`tr`) olarak kalır (Laracasts İngilizce yayını → Türkçe çeviri).
+- Altyazı ayarları checkbox'ları (Orijinali göster / Çeviriyi göster / Bulanıklaştır) 3 eşit kolonlu grid'e alındı. Önceki flex-wrap düzeni metin uzunluğuna göre TR'de 2+1, EN'de 1 satır oluyordu; artık her dilde tutarlı yan yana dizilir.
+- Checkbox etiketleri kısaltıldı (TR: "Orijinal altyazıyı göster" → "Orijinali göster", "Orijinali bulanıklaştır" → "Bulanıklaştır"; EN: "Show original subtitle" → "Show original") — 3 kolona sığması için.
+
+### Migration
+
+- Mevcut kullanıcıların kayıtlı `uiLanguage` tercihi korunur; yalnızca yeni kurulum/sıfırlama varsayılanı `en` olur.
 
 ### Değişti
 

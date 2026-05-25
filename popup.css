@@ -396,16 +396,22 @@ body {
   margin-bottom: 0;
 }
 
-/* Yatay yerleştirilmiş üç checkbox (Orijinal/Çeviri/Bulanık) */
+/* Üç checkbox 3 eşit kolon grid: her dilde (TR/EN) tutarlı yan yana dizilir,
+   metin uzunluğuna göre wrap değişmez. */
 .checkbox-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
   margin-bottom: 6px;
+  align-items: center;
 }
 
 .checkbox-row label {
   margin: 0;
+  font-size: 11px;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 /* Custom checkbox: native appearance kaldırılır, monokrom kutu + tik */

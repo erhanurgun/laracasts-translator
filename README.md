@@ -149,7 +149,7 @@ Popup menüsünden aşağıdaki ayarlar değiştirilebilir:
 | Ayar                        | Varsayılan        | Açıklama                                                         |
 |-----------------------------|-------------------|------------------------------------------------------------------|
 | **Eklenti durumu**          | Açık              | Çeviriyi etkinleştir/devre dışı bırak                            |
-| **Arayüz dili**             | Türkçe            | Popup metinleri TR/EN arasında değiştirilebilir, anlık uygulanır |
+| **Arayüz dili**             | English           | Popup metinleri TR/EN arasında değiştirilebilir, anlık uygulanır |
 | **Çeviri hedef dili**       | Türkçe            | 23 BCP-47 dil seçeneği (de, es, fr, ja, ko, zh, ar vb.)          |
 | **OpenAI modeli**           | gpt-5.4-nano      | API'den çekilen aktif modeller; yenile butonu cache'i atlatır    |
 | **Orijinal altyazı**        | Açık              | İngilizce altyazıyı göster/gizle                                 |

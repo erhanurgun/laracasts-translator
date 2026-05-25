@@ -47,8 +47,8 @@ describe('LCTConstants', () => {
   });
 
   // v0.5.0: çoklu dil + dinamik model
-  it('DEFAULT_SETTINGS uiLanguage tr olmalı', () => {
-    expect(LCTConstants.DEFAULT_SETTINGS.uiLanguage).toBe('tr');
+  it('DEFAULT_SETTINGS uiLanguage en olmalı (varsayılan arayüz dili)', () => {
+    expect(LCTConstants.DEFAULT_SETTINGS.uiLanguage).toBe('en');
   });
 
   it('DEFAULT_SETTINGS targetLanguage tr olmalı', () => {

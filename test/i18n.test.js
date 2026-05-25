@@ -26,7 +26,7 @@ describe('LCT_I18N.t()', () => {
 
   it('en ile İngilizce metin döndürür', () => {
     expect(LCT_I18N.t('popup.subtitle.title', 'en')).toBe('Subtitle Settings');
-    expect(LCT_I18N.t('popup.subtitle.showOriginal', 'en')).toBe('Show original subtitle');
+    expect(LCT_I18N.t('popup.subtitle.showOriginal', 'en')).toBe('Show original');
   });
 
   it('bilinmeyen dil için tr fallback uygulanır', () => {
